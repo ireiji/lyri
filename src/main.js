@@ -278,6 +278,15 @@ class LiveLyricsApp {
     if (this.dom.inputLyricsApiUrl) {
       const savedApiUrl = localStorage.getItem('spotify_lyrics_api_url') || '';
       this.dom.inputLyricsApiUrl.value = savedApiUrl;
+      if (this.dom.lyricsApiStatus) {
+        if (savedApiUrl) {
+          this.dom.lyricsApiStatus.textContent = `Custom instance configured: ${savedApiUrl}`;
+          this.dom.lyricsApiStatus.className = 'text-[10px] text-emerald-400 font-mono';
+        } else {
+          this.dom.lyricsApiStatus.textContent = 'Direct LRCLIB Synced Lyrics active (zero setup required)';
+          this.dom.lyricsApiStatus.className = 'text-[10px] text-[#73675e]';
+        }
+      }
     }
 
     if (this.dom.btnSaveLyricsApi) {
@@ -285,11 +294,11 @@ class LiveLyricsApp {
         const url = this.dom.inputLyricsApiUrl.value.trim();
         if (url) {
           localStorage.setItem('spotify_lyrics_api_url', url);
-          this.dom.lyricsApiStatus.textContent = `✓ Saved custom API URL: ${url}`;
+          this.dom.lyricsApiStatus.textContent = `✓ Saved custom instance: ${url}`;
           this.dom.lyricsApiStatus.className = 'text-[10px] text-emerald-400 font-mono';
         } else {
           localStorage.removeItem('spotify_lyrics_api_url');
-          this.dom.lyricsApiStatus.textContent = 'Using default (localhost:8080 + public mirrors)';
+          this.dom.lyricsApiStatus.textContent = 'Direct LRCLIB Synced Lyrics active (zero setup required)';
           this.dom.lyricsApiStatus.className = 'text-[10px] text-[#73675e]';
         }
       });
@@ -297,23 +306,48 @@ class LiveLyricsApp {
 
     if (this.dom.btnTestLyricsApi) {
       this.dom.btnTestLyricsApi.addEventListener('click', async () => {
-        const url = (this.dom.inputLyricsApiUrl.value.trim() || 'http://localhost:8080').replace(/\/+$/, '');
+        const inputVal = this.dom.inputLyricsApiUrl.value.trim();
+        if (!inputVal) {
+          this.dom.lyricsApiStatus.textContent = 'Field is empty. Direct LRCLIB Synced Lyrics is active with zero setup.';
+          this.dom.lyricsApiStatus.className = 'text-[10px] text-emerald-400';
+          return;
+        }
+
+        const url = inputVal.replace(/\/+$/, '');
         this.dom.lyricsApiStatus.textContent = `Testing connection to ${url}...`;
         this.dom.lyricsApiStatus.className = 'text-[10px] text-[#c48890]';
+        
+        let success = false;
+        let note = '';
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 3500);
           const res = await fetch(`${url}/?trackid=4cOdK2wGLETKBW3PvgPWqT&format=raw`, { signal: controller.signal });
           clearTimeout(timeoutId);
           if (res.ok) {
-            this.dom.lyricsApiStatus.textContent = `✓ Connected successfully to Spotify Lyrics API!`;
-            this.dom.lyricsApiStatus.className = 'text-[10px] text-emerald-400 font-bold';
+            success = true;
           } else {
-            this.dom.lyricsApiStatus.textContent = `Endpoint responded with status ${res.status}. Automatic LRCLIB fallback enabled.`;
-            this.dom.lyricsApiStatus.className = 'text-[10px] text-amber-400';
+            note = `(Server returned ${res.status})`;
           }
         } catch (e) {
-          this.dom.lyricsApiStatus.textContent = `Could not reach ${url}. (Make sure local Docker or service is active). Using LRCLIB fallback.`;
+          // If remote instance failed due to CORS, check via proxy
+          if (url.startsWith('https://') || (url.startsWith('http://') && !url.includes('localhost') && !url.includes('127.0.0.1'))) {
+            try {
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`${url}/?trackid=4cOdK2wGLETKBW3PvgPWqT&format=raw`)}`;
+              const pRes = await fetch(proxyUrl);
+              if (pRes.ok) {
+                success = true;
+                note = '(via proxy fallback)';
+              }
+            } catch (pe) {}
+          }
+        }
+
+        if (success) {
+          this.dom.lyricsApiStatus.textContent = `✓ Connected successfully to instance! ${note}`;
+          this.dom.lyricsApiStatus.className = 'text-[10px] text-emerald-400 font-bold';
+        } else {
+          this.dom.lyricsApiStatus.textContent = `Could not reach ${url}. Fast LRCLIB fallback is active.`;
           this.dom.lyricsApiStatus.className = 'text-[10px] text-amber-400';
         }
       });

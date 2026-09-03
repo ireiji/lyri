@@ -48,65 +48,65 @@ export function parseSpotifyLyricsApiResponse(data, trackName, artistName, durat
 }
 
 /**
- * Fetches lyrics directly from github.com/akashrchandran/spotify-lyrics-api
- * Queries configured or local/public instances via trackid or url
+ * Fetches lyrics from akashrchandran/spotify-lyrics-api if configured by user
+ * When not configured, returns null immediately to use LRCLIB with zero errors.
  */
 export async function fetchLyricsFromSpotifyLyricsApi(trackId, trackUrl, trackName, artistName, durationSec) {
   if (!trackId && !trackUrl) return null;
 
   const userCustomUrl = localStorage.getItem('spotify_lyrics_api_url');
-  const candidateBases = [];
-
-  if (userCustomUrl && userCustomUrl.trim()) {
-    candidateBases.push(userCustomUrl.trim().replace(/\/+$/, ''));
+  // If user hasn't set up or specified a custom endpoint, bypass to avoid ERR_CONNECTION_REFUSED
+  if (!userCustomUrl || !userCustomUrl.trim()) {
+    return null;
   }
 
-  // Common local Docker and hosted endpoints for akashrchandran/spotify-lyrics-api
-  candidateBases.push('http://localhost:8080');
-  candidateBases.push('https://spotify-lyrics-api.vercel.app');
-  candidateBases.push('https://spotify-lyric-api-984e7b.herokuapp.com');
+  const base = userCustomUrl.trim().replace(/\/+$/, '');
+  const targetUrl = trackId
+    ? `${base}/?trackid=${encodeURIComponent(trackId)}&format=raw`
+    : `${base}/?url=${encodeURIComponent(trackUrl)}&format=lrc`;
 
-  for (const base of candidateBases) {
-    const urlsToTry = [];
-    if (trackId) {
-      urlsToTry.push(`${base}/?trackid=${encodeURIComponent(trackId)}&format=raw`);
-      urlsToTry.push(`${base}/?trackid=${encodeURIComponent(trackId)}&format=lrc`);
-    }
-    if (trackUrl) {
-      urlsToTry.push(`${base}/?url=${encodeURIComponent(trackUrl)}&format=lrc`);
-    }
-
-    for (const targetUrl of urlsToTry) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-        const res = await fetch(targetUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const contentType = res.headers.get('content-type') || '';
-          let parsed = null;
-          if (contentType.includes('application/json')) {
-            const json = await res.json();
-            if (!json.error) {
-              parsed = parseSpotifyLyricsApiResponse(json, trackName, artistName, durationSec);
-            }
-          } else {
-            const text = await res.text();
-            if (text && !text.includes('<!DOCTYPE') && !text.includes('<html')) {
-              parsed = parseSpotifyLyricsApiResponse(text, trackName, artistName, durationSec);
-            }
-          }
-
-          if (parsed && parsed.frames && parsed.frames.length > 0) {
-            console.log(`[SpotifyLyricsAPI] Loaded synced lyrics for "${trackName}" from ${base}`);
-            parsed.source = 'spotify-lyrics-api';
-            return parsed;
-          }
+  const doAttempt = async (url) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!res.ok) return null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const json = await res.json();
+        return json.error ? null : parseSpotifyLyricsApiResponse(json, trackName, artistName, durationSec);
+      } else {
+        const text = await res.text();
+        if (text && !text.includes('<!DOCTYPE') && !text.includes('<html')) {
+          return parseSpotifyLyricsApiResponse(text, trackName, artistName, durationSec);
         }
-      } catch (e) {
-        // Continue trying next candidate
+      }
+      return null;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
+
+  try {
+    const parsed = await doAttempt(targetUrl);
+    if (parsed && parsed.frames && parsed.frames.length > 0) {
+      parsed.source = 'spotify-lyrics-api';
+      return parsed;
+    }
+  } catch (err) {
+    // If user entered a remote URL that is blocked by browser CORS, attempt via CORS proxy
+    if (base.startsWith('https://') || (base.startsWith('http://') && !base.includes('localhost') && !base.includes('127.0.0.1'))) {
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        const parsed = await doAttempt(proxyUrl);
+        if (parsed && parsed.frames && parsed.frames.length > 0) {
+          parsed.source = 'spotify-lyrics-api';
+          return parsed;
+        }
+      } catch (proxyErr) {
+        // Fallback silently to LRCLIB
       }
     }
   }

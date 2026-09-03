@@ -253,17 +253,17 @@
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-1.5">
                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span class="text-xs font-bold text-[#f4f1ea]">Spotify Lyrics API</span>
+                <span class="text-xs font-bold text-[#f4f1ea]">Spotify Lyrics API (Optional)</span>
               </div>
               <a href="https://github.com/akashrchandran/spotify-lyrics-api" target="_blank" rel="noreferrer" class="text-[10px] text-[#c48890] hover:underline font-mono">akashrchandran/api</a>
             </div>
-            <p class="text-[10px] text-[#8e8278] leading-tight">Queries your local or self-hosted instance first for line/word synced lyrics, with instant LRCLIB fallback.</p>
+            <p class="text-[10px] text-[#8e8278] leading-tight">If running a self-hosted instance (e.g. Docker on localhost:8080), enter it here. When left blank, fast direct LRCLIB synced lyrics are used automatically.</p>
             <div class="flex gap-1.5 pt-0.5">
-              <input id="input-lyrics-api-url" type="text" placeholder="http://localhost:8080 (or custom URL)" class="flex-1 px-2.5 py-1.5 bg-[#161312] border border-[#302a27] rounded-lg text-[11px] text-white font-mono focus:outline-none focus:border-[#c48890]" />
+              <input id="input-lyrics-api-url" type="text" placeholder="e.g. http://localhost:8080 (optional)" class="flex-1 px-2.5 py-1.5 bg-[#161312] border border-[#302a27] rounded-lg text-[11px] text-white font-mono focus:outline-none focus:border-[#c48890]" />
               <button id="btn-save-lyrics-api" class="px-2.5 py-1.5 bg-[#25201e] hover:bg-[#332c28] border border-[#3b3430] text-[11px] font-semibold rounded-lg text-[#f4f1ea] transition active:scale-95">Save</button>
               <button id="btn-test-lyrics-api" class="px-2.5 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 text-[11px] font-semibold rounded-lg text-emerald-300 transition active:scale-95">Test</button>
             </div>
-            <span id="lyrics-api-status" class="text-[10px] text-[#73675e]">Default: http://localhost:8080 + public mirrors</span>
+            <span id="lyrics-api-status" class="text-[10px] text-[#73675e]">Direct LRCLIB Synced Lyrics active (zero setup required)</span>
           </div>
         </div>
 

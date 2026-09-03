@@ -6,17 +6,47 @@ export class DemoAudioEngine {
     this.intervalId = null;
     this.isPlaying = false;
     this.currentStep = 0;
+    this.hasGesture = false;
+
+    // Listen for first interaction to allow Web Audio playback without autoplay restrictions
+    if (typeof window !== 'undefined') {
+      const unlock = () => {
+        this.hasGesture = true;
+        if (this.isPlaying && !this.isMuted) {
+          this.initContext(true);
+        }
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('keydown', unlock);
+        window.removeEventListener('touchstart', unlock);
+      };
+
+      window.addEventListener('click', unlock, { passive: true, once: true });
+      window.addEventListener('keydown', unlock, { passive: true, once: true });
+      window.addEventListener('touchstart', unlock, { passive: true, once: true });
+    }
   }
 
-  initContext() {
+  initContext(fromGesture = false) {
+    if (fromGesture) {
+      this.hasGesture = true;
+    }
+    // Web Audio requires a user gesture before creation or resumption
+    if (!this.hasGesture) {
+      return;
+    }
+
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
+        }
+      } catch (e) {
+        return;
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
   }
 
@@ -89,7 +119,9 @@ export class DemoAudioEngine {
   }
 
   startBeat(bpm = 90) {
-    this.initContext();
+    if (this.hasGesture) {
+      this.initContext();
+    }
     this.isPlaying = true;
     this.currentStep = 0;
     const stepTimeMs = (60 / bpm / 4) * 1000;
@@ -104,7 +136,7 @@ export class DemoAudioEngine {
     ];
 
     this.intervalId = window.setInterval(() => {
-      if (!this.ctx || !this.isPlaying) return;
+      if (!this.ctx || this.ctx.state !== 'running' || !this.isPlaying) return;
       const now = this.ctx.currentTime;
       const step = this.currentStep % 16;
       const bar = Math.floor((this.currentStep / 16) % 4);
@@ -136,6 +168,9 @@ export class DemoAudioEngine {
 
   setMuted(muted) {
     this.isMuted = muted;
+    if (!muted && this.isPlaying) {
+      this.initContext(true);
+    }
   }
 }
 
