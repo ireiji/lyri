@@ -23,6 +23,7 @@ class LiveLyricsApp {
     this.activeWordId = null;
     this.lastFrameTime = performance.now();
     this.spotifyPollInterval = null;
+    this.spotifyAnchor = null; // High-precision monotonic anchor { baseSec, receivePerf }
 
     // Optical Tilt Physics
     this.mouseX = 0;
@@ -65,6 +66,14 @@ class LiveLyricsApp {
       artworkImg: document.getElementById('artwork-img'),
       btnQuickSync: document.getElementById('btn-quick-sync'),
       quickSyncVal: document.getElementById('quick-sync-val'),
+      // Real-Time Sync Tuning Bar
+      btnSyncSubLarge: document.getElementById('btn-sync-sub-large'),
+      btnSyncSubSmall: document.getElementById('btn-sync-sub-small'),
+      syncOffsetDisplay: document.getElementById('sync-offset-display'),
+      btnSyncAddSmall: document.getElementById('btn-sync-add-small'),
+      btnSyncAddLarge: document.getElementById('btn-sync-add-large'),
+      btnTapSync: document.getElementById('btn-tap-sync'),
+      btnResetSync: document.getElementById('btn-reset-sync'),
       // Settings Modal
       settingsModal: document.getElementById('settings-modal'),
       btnOpenSettings: document.getElementById('btn-open-settings'),
@@ -257,6 +266,28 @@ class LiveLyricsApp {
       });
     }
 
+    if (this.dom.btnSyncSubLarge) {
+      this.dom.btnSyncSubLarge.addEventListener('click', () => this.updateSyncOffset(-0.5));
+    }
+    if (this.dom.btnSyncSubSmall) {
+      this.dom.btnSyncSubSmall.addEventListener('click', () => this.updateSyncOffset(-0.1));
+    }
+    if (this.dom.btnSyncAddSmall) {
+      this.dom.btnSyncAddSmall.addEventListener('click', () => this.updateSyncOffset(0.1));
+    }
+    if (this.dom.btnSyncAddLarge) {
+      this.dom.btnSyncAddLarge.addEventListener('click', () => this.updateSyncOffset(0.5));
+    }
+    if (this.dom.syncOffsetDisplay) {
+      this.dom.syncOffsetDisplay.addEventListener('click', () => this.setSyncOffset(0));
+    }
+    if (this.dom.btnResetSync) {
+      this.dom.btnResetSync.addEventListener('click', () => this.setSyncOffset(0));
+    }
+    if (this.dom.btnTapSync) {
+      this.dom.btnTapSync.addEventListener('click', () => this.tapToSync());
+    }
+
     if (this.dom.btnQuickSync) {
       this.dom.btnQuickSync.addEventListener('click', () => {
         this.dom.settingsModal.classList.remove('hidden');
@@ -377,11 +408,37 @@ class LiveLyricsApp {
       }
     });
 
-    // Spacebar Play/Pause
+    // Keyboard Navigation & Real-Time Sync Shortcuts
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.code === 'Space') {
         e.preventDefault();
         this.togglePlayback(!this.isPlaying);
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        this.seekTo(Math.max(0, this.currentTime - 5));
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        this.seekTo(this.currentTime + 5);
+      } else if (e.key === '[' || e.key === '-') {
+        e.preventDefault();
+        this.updateSyncOffset(-0.1);
+      } else if (e.key === ']' || e.key === '=') {
+        e.preventDefault();
+        this.updateSyncOffset(0.1);
+      } else if (e.key === '{') {
+        e.preventDefault();
+        this.updateSyncOffset(-0.5);
+      } else if (e.key === '}') {
+        e.preventDefault();
+        this.updateSyncOffset(0.5);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        this.setSyncOffset(0);
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        this.tapToSync();
       }
     });
   }
@@ -408,6 +465,8 @@ class LiveLyricsApp {
 
   switchMode(newMode) {
     this.mode = newMode;
+    this.spotifyAnchor = null;
+
     if (newMode === 'demo') {
       this.dom.btnModeDemo.classList.add('bg-[#2b2522]', 'text-[#f4f1ea]');
       this.dom.btnModeDemo.classList.remove('text-[#8e8278]');
@@ -439,16 +498,56 @@ class LiveLyricsApp {
     }
   }
 
-  updateSyncOffset(delta) {
-    this.syncOffset = Math.round((this.syncOffset + delta) * 10) / 10;
-    this.syncOffset = Math.max(-2.0, Math.min(2.0, this.syncOffset));
+  setSyncOffset(val) {
+    this.syncOffset = Math.round(val * 100) / 100;
+    this.syncOffset = Math.max(-5.0, Math.min(5.0, this.syncOffset));
     localStorage.setItem('spotify_sync_offset', this.syncOffset.toString());
     this.renderSyncOffsetUI();
+
+    // Immediately reflect offset in current time
+    if (this.mode === 'spotify' && this.spotifyAnchor) {
+      const elapsed = (performance.now() - this.spotifyAnchor.receivePerf) / 1000;
+      this.currentTime = Math.max(0, this.spotifyAnchor.baseSec + elapsed + this.syncOffset);
+      this.updateActiveFrame(true);
+      this.updateScrubber();
+    }
+  }
+
+  updateSyncOffset(delta) {
+    this.setSyncOffset(this.syncOffset + delta);
+  }
+
+  // Tap-to-Sync: auto-calibrates latency in a single tap on the beat
+  tapToSync() {
+    const frames = this.currentTrack?.frames;
+    if (!frames || frames.length === 0) return;
+
+    // Find the current active frame the user is listening to
+    const currentFrame = frames[this.activeFrameIndex] || frames[0];
+    if (!currentFrame) return;
+
+    let rawAudioTime = this.currentTime - this.syncOffset;
+    if (this.mode === 'spotify' && this.spotifyAnchor) {
+      rawAudioTime = this.spotifyAnchor.baseSec + ((performance.now() - this.spotifyAnchor.receivePerf) / 1000);
+    }
+
+    // Set offset so frame start time aligns with current audio
+    const neededOffset = currentFrame.startTime - rawAudioTime;
+    this.setSyncOffset(neededOffset);
+
+    // Visual feedback indicator on the sync display
+    if (this.dom.syncOffsetDisplay) {
+      this.dom.syncOffsetDisplay.classList.add('ring-2', 'ring-[#c48890]', 'bg-[#c48890]/40');
+      setTimeout(() => {
+        this.dom.syncOffsetDisplay?.classList.remove('ring-2', 'ring-[#c48890]', 'bg-[#c48890]/40');
+      }, 500);
+    }
   }
 
   renderSyncOffsetUI() {
     const sign = this.syncOffset > 0 ? '+' : '';
-    const formatted = `${sign}${this.syncOffset.toFixed(1)}s`;
+    const formatted = `${sign}${this.syncOffset.toFixed(2)}s`;
+    if (this.dom.syncOffsetDisplay) this.dom.syncOffsetDisplay.textContent = formatted;
     if (this.dom.syncDelayVal) this.dom.syncDelayVal.textContent = formatted;
     if (this.dom.quickSyncVal) this.dom.quickSyncVal.textContent = formatted;
   }
@@ -469,16 +568,16 @@ class LiveLyricsApp {
       if (this.mode !== 'spotify' || !spotifyClient.isConnected()) return;
 
       const state = await spotifyClient.getCurrentlyPlaying();
-      if (state) {
-        this.isPlaying = state.isPlaying;
-        this.togglePlayPauseUI(this.isPlaying);
+      if (!state) return;
 
-        // Latency-compensated Spotify playback time + user calibration offset
-        const liveSpotifyTime = (state.latencyCompensatedProgressMs / 1000) + this.syncOffset;
+      this.isPlaying = state.isPlaying;
+      this.togglePlayPauseUI(this.isPlaying);
 
+      if (state.trackName) {
         const trackKey = `${state.trackName}-${state.artistName}`;
         if (trackKey !== lastTrackId) {
           lastTrackId = trackKey;
+          this.spotifyAnchor = null;
           this.dom.trackTitleText.textContent = state.trackName;
           this.dom.trackArtistText.textContent = state.artistName;
 
@@ -488,14 +587,12 @@ class LiveLyricsApp {
             this.dom.artworkIcon.classList.add('hidden');
           }
 
-          this.currentTime = Math.max(0, liveSpotifyTime);
-
           // Fetch lyrics: checks akashrchandran/spotify-lyrics-api first, then LRCLIB
           const lyrics = await fetchTrackLyrics(
             state.trackName,
             state.artistName,
             state.albumName,
-            state.durationMs / 1000,
+            state.durationMs ? state.durationMs / 1000 : 180,
             state.trackId,
             state.trackUrl
           );
@@ -504,23 +601,49 @@ class LiveLyricsApp {
             this.dom.totalDurationText.textContent = this.formatTime(lyrics.duration);
             const sourceLabel = lyrics.source === 'spotify-lyrics-api' ? 'Spotify API' : (lyrics.source === 'demo' ? 'Demo' : 'LRCLIB');
             this.dom.modeBadge.textContent = `Live Spotify • ${sourceLabel}`;
+            this.activeFrameIndex = -1;
             this.updateActiveFrame(true);
           }
-        } else {
-          // Reconcile time: if seeked or skipped (> 0.45s difference), snap immediately!
-          const drift = liveSpotifyTime - this.currentTime;
-          if (Math.abs(drift) > 0.45) {
-            this.currentTime = Math.max(0, liveSpotifyTime);
-          } else if (Math.abs(drift) > 0.03) {
-            // Smoothly nudge clock forward/backward without jarring jumps
-            this.currentTime += drift * 0.2;
+        }
+
+        // Live Clock Synchronization with Monotonic Drift Compensation
+        if (state.isPlaying) {
+          if (!this.spotifyAnchor) {
+            // Initialize hardware monotonic anchor
+            this.spotifyAnchor = {
+              baseSec: state.progressSec,
+              receivePerf: state.perfReceive,
+            };
+            this.currentTime = Math.max(0, state.progressSec + this.syncOffset);
+          } else {
+            // Predict what continuous local clock is at the instant poll response was received
+            const elapsedSinceAnchor = (state.perfReceive - this.spotifyAnchor.receivePerf) / 1000;
+            const currentPredicted = this.spotifyAnchor.baseSec + elapsedSinceAnchor;
+            const drift = state.progressSec - currentPredicted;
+
+            // If user sought, skipped track, or unpaused (> 0.65s drift), snap anchor immediately!
+            if (Math.abs(drift) > 0.65) {
+              this.spotifyAnchor = {
+                baseSec: state.progressSec,
+                receivePerf: state.perfReceive,
+              };
+              this.currentTime = Math.max(0, state.progressSec + this.syncOffset);
+            } else {
+              // Gently absorb network jitter without sudden jumps or visual stutter
+              this.spotifyAnchor.baseSec += drift * 0.25;
+              this.spotifyAnchor.receivePerf = state.perfReceive;
+            }
           }
+        } else {
+          // Playback is paused in Spotify
+          this.spotifyAnchor = null;
+          this.currentTime = Math.max(0, state.progressSec + this.syncOffset);
         }
       }
     };
 
     poll();
-    this.spotifyPollInterval = setInterval(poll, 750);
+    this.spotifyPollInterval = setInterval(poll, 650);
   }
 
   applyTapeColor(color) {
@@ -606,12 +729,17 @@ class LiveLyricsApp {
     const delta = Math.min(0.1, Math.max(0, (timestamp - this.lastFrameTime) / 1000));
     this.lastFrameTime = timestamp;
 
-    // Both Demo AND Live Spotify progress smoothly in the local render loop!
     if (this.isPlaying) {
-      this.currentTime += delta;
-      const total = this.currentTrack.duration || 34;
-      if (this.mode === 'demo' && this.currentTime >= total) {
-        this.currentTime = 0; // Loop demo
+      if (this.mode === 'spotify' && this.spotifyAnchor) {
+        // Continuous, rock-solid monotonic interpolation directly from hardware performance.now()
+        const elapsed = (performance.now() - this.spotifyAnchor.receivePerf) / 1000;
+        this.currentTime = Math.max(0, this.spotifyAnchor.baseSec + elapsed + this.syncOffset);
+      } else {
+        this.currentTime += delta;
+        const total = this.currentTrack.duration || 34;
+        if (this.mode === 'demo' && this.currentTime >= total) {
+          this.currentTime = 0; // Loop demo
+        }
       }
       this.updateScrubber();
     }

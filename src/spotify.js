@@ -178,22 +178,25 @@ export class SpotifyClient {
       if (!data || !data.item) return null;
 
       const roundTripMs = performance.now() - startTime;
-      const now = Date.now();
-      // Estimate delay between Spotify server measurement and client receive time
-      const serverAgeMs = data.timestamp ? Math.max(0, Math.min(3000, now - data.timestamp)) : (roundTripMs / 2);
+      const perfReceive = performance.now();
+      const networkLatencyMs = roundTripMs / 2;
+
+      // Compensate for network transit time (from Spotify backend to browser)
+      const adjustedProgressMs = data.is_playing ? data.progress_ms + networkLatencyMs : data.progress_ms;
 
       return {
         trackId: data.item.id,
         trackUrl: data.item.external_urls?.spotify || (data.item.id ? `https://open.spotify.com/track/${data.item.id}` : null),
         isPlaying: data.is_playing,
         progressMs: data.progress_ms,
-        latencyCompensatedProgressMs: data.is_playing ? data.progress_ms + serverAgeMs : data.progress_ms,
+        progressSec: adjustedProgressMs / 1000,
+        perfReceive,
+        roundTripMs,
         durationMs: data.item.duration_ms,
         trackName: data.item.name,
         artistName: data.item.artists.map((a) => a.name).join(', '),
         albumName: data.item.album ? data.item.album.name : '',
         albumArt: data.item.album?.images?.[0]?.url || null,
-        timestamp: now,
       };
     } catch (err) {
       console.warn('Spotify fetch player failed:', err);
