@@ -2,10 +2,10 @@
 // Each item contains the active time window, the stacked lines, and per-word timings and styling.
 
 export const PAYPHONE_DEMO = {
-  id: 'jackie_brown',
-  title: 'Jackie Brown',
-  artist: 'Brent Faiyaz',
-  album: 'WASTELAND',
+  id: 'payphone',
+  title: 'Payphone (feat. Wiz Khalifa)',
+  artist: 'Maroon 5, Wiz Khalifa',
+  album: 'Overexposed',
   duration: 34.0,
   frames: [
     {

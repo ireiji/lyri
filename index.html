@@ -120,30 +120,6 @@
     <!-- Bottom Controls & Playback Scrubber Bar -->
     <footer id="playback-footer" class="relative z-50 w-full px-4 sm:px-8 pb-5 pt-2 pointer-events-auto flex flex-col items-center">
       
-      <!-- Real-Time Sync Tuning Bar (Real-Time Audio & Vocal Latency Calibrator) -->
-      <div id="sync-tuning-bar" class="w-full max-w-2xl flex items-center justify-between px-3 py-1.5 mb-2 bg-[#161312]/90 backdrop-blur-md border border-[#2d2724] rounded-xl text-[11px] shadow-lg">
-        <div class="flex items-center gap-1 sm:gap-1.5 overflow-x-auto">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-[#8a7f76] flex items-center gap-1 select-none">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span class="hidden sm:inline">Sync Tuning:</span>
-            <span class="sm:hidden">Sync:</span>
-          </span>
-          <button id="btn-sync-sub-large" title="Delay lyrics -0.5s (Shortcut: { )" class="px-1.5 py-0.5 rounded bg-[#1f1b19] hover:bg-[#2b2522] border border-[#332c28] text-[#a89d93] hover:text-[#f4f1ea] transition font-mono text-[10px] active:scale-95">-0.5s</button>
-          <button id="btn-sync-sub-small" title="Delay lyrics -0.1s (Shortcut: [ )" class="px-1.5 py-0.5 rounded bg-[#1f1b19] hover:bg-[#2b2522] border border-[#332c28] text-[#a89d93] hover:text-[#f4f1ea] transition font-mono text-[10px] active:scale-95">-0.1s</button>
-          <span id="sync-offset-display" class="px-2 py-0.5 rounded bg-[#231d1b] border border-[#3d332f] font-mono font-bold text-[#c48890] text-center min-w-[54px] cursor-pointer select-none hover:border-[#c48890]/50 transition" title="Current Spotify sync offset (Click to reset)">+0.00s</span>
-          <button id="btn-sync-add-small" title="Advance lyrics +0.1s (Shortcut: ] )" class="px-1.5 py-0.5 rounded bg-[#1f1b19] hover:bg-[#2b2522] border border-[#332c28] text-[#a89d93] hover:text-[#f4f1ea] transition font-mono text-[10px] active:scale-95">+0.1s</button>
-          <button id="btn-sync-add-large" title="Advance lyrics +0.5s (Shortcut: } )" class="px-1.5 py-0.5 rounded bg-[#1f1b19] hover:bg-[#2b2522] border border-[#332c28] text-[#a89d93] hover:text-[#f4f1ea] transition font-mono text-[10px] active:scale-95">+0.5s</button>
-        </div>
-        <div class="flex items-center gap-2 flex-shrink-0">
-          <button id="btn-tap-sync" title="Tap the exact moment the singer begins the line to auto-sync! (Shortcut: T)" class="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#c48890]/20 hover:bg-[#c48890]/30 border border-[#c48890]/40 text-[#f4f1ea] text-[10px] font-bold transition active:scale-95 shadow-sm">
-            <span>🎯</span>
-            <span class="hidden sm:inline">Tap to Sync</span>
-            <span class="sm:hidden">Sync</span>
-          </button>
-          <button id="btn-reset-sync" title="Reset offset to 0.0s (Shortcut: 0)" class="text-[10px] text-[#8a7f76] hover:text-[#f4f1ea] transition underline underline-offset-2">Reset</button>
-        </div>
-      </div>
-
       <!-- Scrubber Bar and Timestamps -->
       <div class="w-full max-w-2xl flex flex-col gap-1.5 mb-2">
         <div class="flex items-center justify-between text-[11px] font-mono text-[#8a7f76]">
