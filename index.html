@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Lyrics</title>
+    <meta name="description" content="Live Spotify-synced kinetic typography lyrics with word-by-word animation, tape cutout stickers, and authentic fisheye lens effect." />
+    <meta property="og:title" content="Live Lyrics" />
+    <meta property="og:description" content="Live Spotify-synced kinetic typography lyrics with word-by-word animation, tape cutout stickers, and authentic fisheye lens effect." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;0,900;1,700;1,800&family=Syne:wght@700;800;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/index.css" />
+  </head>
+  <body class="bg-[#0b0a0a] text-[#f4f1ea] selection:bg-[#c48890] selection:text-white antialiased overflow-hidden h-screen w-screen flex flex-col justify-between">
+    
+    <!-- Optical SVG Fisheye Displacement Filter for true lens curvature -->
+    <svg id="fisheye-svg-filter" class="absolute w-0 h-0 pointer-events-none" aria-hidden="true">
+      <defs>
+        <radialGradient id="lensBulgeGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#808080" stop-opacity="1" />
+          <stop offset="60%" stop-color="#909090" stop-opacity="1" />
+          <stop offset="100%" stop-color="#404040" stop-opacity="1" />
+        </radialGradient>
+      </defs>
+    </svg>
+
+    <!-- Top Navigation Header -->
+    <header id="top-header" class="relative z-50 w-full px-4 sm:px-8 pt-4 pb-2 flex items-center justify-between pointer-events-auto">
+      <!-- Track Metadata Badge -->
+      <div id="track-info-badge" class="flex items-center gap-3 bg-[#161413]/80 backdrop-blur-md border border-[#2d2825] px-3.5 py-1.5 rounded-full shadow-lg">
+        <div id="track-artwork" class="w-7 h-7 rounded-full bg-[#26211e] flex items-center justify-center overflow-hidden border border-[#3b3430] flex-shrink-0">
+          <span id="artwork-icon" class="text-xs">🎵</span>
+          <img id="artwork-img" class="w-full h-full object-cover hidden" alt="Album Cover" />
+        </div>
+        <div class="flex flex-col pr-1 leading-tight">
+          <div class="flex items-center gap-2">
+            <span id="track-title-text" class="text-xs font-bold text-[#f4f1ea] tracking-tight truncate max-w-[160px] sm:max-w-[220px]">Payphone (feat. Wiz)</span>
+            <span id="mode-badge" class="text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-[#c48890]/20 text-[#c48890] border border-[#c48890]/30">Demo</span>
+          </div>
+          <span id="track-artist-text" class="text-[10px] text-[#8e8278] truncate max-w-[150px] sm:max-w-[200px]">Maroon 5, Wiz Khalifa</span>
+        </div>
+      </div>
+
+      <!-- Quick Action Controls -->
+      <div class="flex items-center gap-2">
+        <!-- Fisheye Quick Toggle -->
+        <button id="btn-toggle-fisheye" title="Toggle Fisheye Lens Effect" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#181514] border border-[#302a27] text-xs font-semibold text-[#eae4d9] hover:bg-[#24201e] transition active:scale-95 shadow-md">
+          <span class="text-[#c48890]">👁️</span>
+          <span class="hidden sm:inline">Fisheye</span>
+          <span id="fisheye-status-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        </button>
+
+        <!-- Audio Beat Mute/Unmute -->
+        <button id="btn-toggle-audio" title="Mute/Unmute Rhythm Beat" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#181514] border border-[#302a27] text-xs font-semibold text-[#eae4d9] hover:bg-[#24201e] transition active:scale-95 shadow-md">
+          <span id="audio-icon">🔊</span>
+          <span class="hidden sm:inline">Beat</span>
+        </button>
+
+        <!-- Tape Color Palette Dropdown / Picker -->
+        <div class="relative">
+          <button id="btn-color-picker" title="Change Tape Sticker Color" class="w-8 h-8 rounded-full bg-[#181514] border border-[#302a27] flex items-center justify-center text-sm hover:bg-[#24201e] transition active:scale-95 shadow-md">
+            <span id="color-swatch-preview" class="w-3.5 h-3.5 rounded-full bg-[#c48890] border border-white/20"></span>
+          </button>
+          <!-- Color Picker Menu -->
+          <div id="color-menu" class="hidden absolute right-0 mt-2 p-2 bg-[#181514] border border-[#302a27] rounded-xl shadow-2xl z-50 flex gap-2">
+            <button class="color-btn w-6 h-6 rounded-full bg-[#c48890] hover:scale-110 transition border border-white/30" data-color="#c48890" title="Dusty Rose"></button>
+            <button class="color-btn w-6 h-6 rounded-full bg-[#e07a5f] hover:scale-110 transition border border-white/30" data-color="#e07a5f" title="Terracotta"></button>
+            <button class="color-btn w-6 h-6 rounded-full bg-[#81b29a] hover:scale-110 transition border border-white/30" data-color="#81b29a" title="Sage Green"></button>
+            <button class="color-btn w-6 h-6 rounded-full bg-[#f2cc8f] hover:scale-110 transition border border-white/30" data-color="#f2cc8f" title="Warm Sand"></button>
+            <button class="color-btn w-6 h-6 rounded-full bg-[#9d8189] hover:scale-110 transition border border-white/30" data-color="#9d8189" title="Lilac"></button>
+          </div>
+        </div>
+
+        <!-- Settings / Spotify Connect Modal Button -->
+        <button id="btn-open-settings" title="Spotify & Lyrics Settings" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#181514] border border-[#302a27] text-xs font-semibold text-[#eae4d9] hover:bg-[#24201e] transition active:scale-95 shadow-md">
+          <svg class="w-4 h-4 text-[#1DB954]" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+          </svg>
+          <span class="hidden sm:inline">Spotify</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Stage: Kinetic Typography Stack inside 3D Fisheye Lens Viewport -->
+    <main id="main-stage-container" class="relative flex-1 w-full flex items-center justify-center overflow-hidden">
+      
+      <!-- Fisheye Lens Optical Viewport -->
+      <div id="fisheye-viewport" class="fisheye-viewport fisheye-enabled">
+        
+        <!-- Curved Glass Specular Highlight Reflection -->
+        <div id="fisheye-reflection" class="fisheye-reflection"></div>
+
+        <!-- Barrel Distortion Vignette Overlay -->
+        <div id="fisheye-lens-overlay" class="fisheye-lens-overlay"></div>
+
+        <!-- Dynamic 3D Chamber where text is mapped spherically -->
+        <div id="fisheye-chamber" class="fisheye-chamber relative z-20 px-4 max-w-4xl text-center select-none">
+          
+          <!-- Stacked Kinetic Lines Container -->
+          <div id="kinetic-line-stack" class="line-stack flex flex-col items-center justify-center gap-1 sm:gap-2">
+            <!-- Dynamically injected via JavaScript with exact word highlighting -->
+          </div>
+
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Bottom Controls & Playback Scrubber Bar -->
+    <footer id="playback-footer" class="relative z-50 w-full px-4 sm:px-8 pb-5 pt-2 pointer-events-auto flex flex-col items-center">
+      
+      <!-- Scrubber Bar and Timestamps -->
+      <div class="w-full max-w-2xl flex flex-col gap-1.5 mb-2">
+        <div class="flex items-center justify-between text-[11px] font-mono text-[#8a7f76]">
+          <span id="current-time-text">00:00.0</span>
+          <span id="active-word-label" class="text-xs font-semibold text-[#c48890] tracking-wider uppercase">Live Sync</span>
+          <span id="total-duration-text">00:34.0</span>
+        </div>
+        <div id="scrubber-track" class="relative w-full h-2 bg-[#1f1b19] hover:h-2.5 rounded-full cursor-pointer transition-all border border-[#332c28] overflow-hidden">
+          <div id="scrubber-fill" class="absolute top-0 left-0 h-full bg-[#c48890] rounded-full transition-all duration-75 w-0"></div>
+          <div id="scrubber-handle" class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow -ml-1.5 hidden"></div>
+        </div>
+      </div>
+
+      <!-- Playback Actions & Lens Sliders -->
+      <div class="w-full max-w-2xl flex items-center justify-between bg-[#141211]/90 backdrop-blur-md border border-[#2b2522] px-4 py-2.5 rounded-2xl shadow-xl">
+        
+        <!-- Left: Restart & Prev Frame -->
+        <div class="flex items-center gap-2">
+          <button id="btn-restart" title="Restart Verse" class="p-2 text-[#9a8e84] hover:text-[#f4f1ea] hover:bg-[#24201e] rounded-xl transition active:scale-95">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+          </button>
+          <button id="btn-prev-frame" title="Previous Phrase" class="p-2 text-[#9a8e84] hover:text-[#f4f1ea] hover:bg-[#24201e] rounded-xl transition active:scale-95">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="19 20 9 12 19 4 19 20"/>
+              <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Center: Primary Play / Pause Button -->
+        <button id="btn-play-pause" title="Play / Pause" class="w-11 h-11 rounded-full bg-[#f4f1ea] text-[#0d0c0c] flex items-center justify-center hover:scale-105 active:scale-95 transition shadow-lg">
+          <span id="play-pause-icon">
+            <svg class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+          </span>
+        </button>
+
+        <!-- Right: Next Frame & Fisheye Curvature Slider -->
+        <div class="flex items-center gap-3">
+          <button id="btn-next-frame" title="Next Phrase" class="p-2 text-[#9a8e84] hover:text-[#f4f1ea] hover:bg-[#24201e] rounded-xl transition active:scale-95">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 4 15 12 5 20 5 4"/>
+              <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </button>
+
+          <!-- Fisheye Intensity Dial / Slider -->
+          <div class="hidden sm:flex items-center gap-2 pl-2 border-l border-[#2e2825]">
+            <span class="text-[10px] uppercase font-bold text-[#8a7f76]">Lens</span>
+            <input id="fisheye-intensity-slider" type="range" min="0" max="100" value="70" class="w-16 sm:w-20 h-1.5 bg-[#25201e] rounded-lg cursor-pointer" title="Fisheye Distortion Intensity" />
+          </div>
+        </div>
+
+      </div>
+
+    </footer>
+
+    <!-- Settings & Spotify PKCE Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md hidden flex items-center justify-center p-4">
+      <div class="bg-[#161413] border border-[#302a27] rounded-2xl w-full max-w-md p-6 shadow-2xl relative flex flex-col gap-5">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-[#292421] pb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-[#1DB954]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            <h3 class="text-base font-bold text-[#f4f1ea]">Spotify & Lyrics Connection</h3>
+          </div>
+          <button id="btn-close-settings" class="text-[#8e8278] hover:text-white p-1 rounded-lg">✕</button>
+        </div>
+
+        <!-- Mode Selector: Demo vs Live Spotify -->
+        <div class="flex rounded-xl bg-[#0f0e0d] p-1 border border-[#25201e]">
+          <button id="btn-mode-demo" class="flex-1 py-1.5 text-xs font-bold rounded-lg bg-[#2b2522] text-[#f4f1ea] transition">Demo (Wiz Payphone)</button>
+          <button id="btn-mode-spotify" class="flex-1 py-1.5 text-xs font-bold rounded-lg text-[#8e8278] hover:text-[#f4f1ea] transition">Live Spotify</button>
+        </div>
+
+        <!-- Spotify Config Section -->
+        <div id="spotify-config-section" class="flex flex-col gap-3">
+          <div class="text-xs text-[#a3978d] leading-relaxed">
+            Connect your own Spotify account using standard PKCE OAuth. No client secret or server required.
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[11px] font-semibold text-[#8e8278]">Your Spotify Client ID</label>
+            <input id="input-client-id" type="text" placeholder="e.g. 7a3f890..." class="w-full px-3 py-2 bg-[#0d0c0c] border border-[#2f2926] rounded-xl text-xs text-white focus:outline-none focus:border-[#1DB954]" />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label class="text-[11px] font-semibold text-[#8e8278]">Redirect URI (Add to Spotify Dashboard)</label>
+            <div class="flex items-center gap-2">
+              <input id="input-redirect-uri" type="text" readonly class="w-full px-3 py-1.5 bg-[#0d0c0c] border border-[#26211e] rounded-xl text-[11px] text-[#8e8278] font-mono select-all" />
+              <button id="btn-copy-redirect" class="px-3 py-1.5 bg-[#25201e] hover:bg-[#332c28] border border-[#3b3430] text-xs font-semibold rounded-xl text-[#f4f1ea] whitespace-nowrap transition active:scale-95">Copy</button>
+            </div>
+          </div>
+
+          <!-- Connection Status Button -->
+          <div class="pt-2 flex items-center gap-2">
+            <button id="btn-connect-spotify" class="flex-1 py-2.5 bg-[#1DB954] hover:bg-[#1aa34a] text-black font-extrabold text-xs rounded-xl shadow-lg transition active:scale-95">
+              Connect with Spotify
+            </button>
+            <button id="btn-disconnect-spotify" class="hidden px-4 py-2.5 bg-red-900/30 hover:bg-red-900/50 text-red-300 font-semibold text-xs rounded-xl border border-red-800/40 transition active:scale-95">
+              Disconnect
+            </button>
+          </div>
+        </div>
+
+        <!-- Manual LRCLIB Song Search Section -->
+        <div class="pt-2 border-t border-[#292421] flex flex-col gap-2">
+          <label class="text-[11px] font-semibold text-[#8e8278]">Or Search Any Song (LRCLIB Synced Lyrics)</label>
+          <div class="flex gap-2">
+            <input id="input-song-search" type="text" placeholder="Song & Artist (e.g. Blinding Lights The Weeknd)" class="flex-1 px-3 py-2 bg-[#0d0c0c] border border-[#2f2926] rounded-xl text-xs text-white focus:outline-none focus:border-[#c48890]" />
+            <button id="btn-search-lyrics" class="px-3 py-2 bg-[#25201e] hover:bg-[#332c28] border border-[#3b3430] text-xs font-semibold rounded-xl text-[#f4f1ea] transition active:scale-95">Load</button>
+          </div>
+          <span id="search-status-text" class="text-[10px] text-[#73675e]"></span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Pure HTML, CSS, JavaScript Execution Entry Point -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
