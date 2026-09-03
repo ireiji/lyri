@@ -16,6 +16,7 @@ class LiveLyricsApp {
     this.fisheyeIntensity = 0.7;
     this.tapeColor = '#c48890';
     this.mode = 'demo'; // 'demo' | 'spotify'
+    this.syncOffset = parseFloat(localStorage.getItem('spotify_sync_offset') || '0.0');
 
     this.activeFrameIndex = -1;
     this.activeWordId = null;
@@ -59,6 +60,8 @@ class LiveLyricsApp {
       modeBadge: document.getElementById('mode-badge'),
       artworkIcon: document.getElementById('artwork-icon'),
       artworkImg: document.getElementById('artwork-img'),
+      btnQuickSync: document.getElementById('btn-quick-sync'),
+      quickSyncVal: document.getElementById('quick-sync-val'),
       // Settings Modal
       settingsModal: document.getElementById('settings-modal'),
       btnOpenSettings: document.getElementById('btn-open-settings'),
@@ -71,6 +74,9 @@ class LiveLyricsApp {
       btnCopyRedirect: document.getElementById('btn-copy-redirect'),
       btnConnectSpotify: document.getElementById('btn-connect-spotify'),
       btnDisconnectSpotify: document.getElementById('btn-disconnect-spotify'),
+      btnSyncDelaySub: document.getElementById('btn-sync-delay-sub'),
+      btnSyncDelayAdd: document.getElementById('btn-sync-delay-add'),
+      syncDelayVal: document.getElementById('sync-delay-val'),
       inputSongSearch: document.getElementById('input-song-search'),
       btnSearchLyrics: document.getElementById('btn-search-lyrics'),
       searchStatusText: document.getElementById('search-status-text'),
@@ -84,6 +90,7 @@ class LiveLyricsApp {
     this.setupSpotifyAuthCheck();
     this.applyTapeColor(this.tapeColor);
     this.applyFisheyeState();
+    this.renderSyncOffsetUI();
     this.updateTrackMetadata();
 
     // Start in active demo mode playing
@@ -229,6 +236,25 @@ class LiveLyricsApp {
       this.checkSpotifyConnectionUI();
     });
 
+    // Audio Sync Offset Calibration
+    if (this.dom.btnSyncDelaySub) {
+      this.dom.btnSyncDelaySub.addEventListener('click', () => {
+        this.updateSyncOffset(-0.1);
+      });
+    }
+
+    if (this.dom.btnSyncDelayAdd) {
+      this.dom.btnSyncDelayAdd.addEventListener('click', () => {
+        this.updateSyncOffset(0.1);
+      });
+    }
+
+    if (this.dom.btnQuickSync) {
+      this.dom.btnQuickSync.addEventListener('click', () => {
+        this.dom.settingsModal.classList.remove('hidden');
+      });
+    }
+
     // LRCLIB Manual Search
     this.dom.btnSearchLyrics.addEventListener('click', async () => {
       const query = this.dom.inputSongSearch.value.trim();
@@ -315,6 +341,20 @@ class LiveLyricsApp {
     }
   }
 
+  updateSyncOffset(delta) {
+    this.syncOffset = Math.round((this.syncOffset + delta) * 10) / 10;
+    this.syncOffset = Math.max(-2.0, Math.min(2.0, this.syncOffset));
+    localStorage.setItem('spotify_sync_offset', this.syncOffset.toString());
+    this.renderSyncOffsetUI();
+  }
+
+  renderSyncOffsetUI() {
+    const sign = this.syncOffset > 0 ? '+' : '';
+    const formatted = `${sign}${this.syncOffset.toFixed(1)}s`;
+    if (this.dom.syncDelayVal) this.dom.syncDelayVal.textContent = formatted;
+    if (this.dom.quickSyncVal) this.dom.quickSyncVal.textContent = formatted;
+  }
+
   startSpotifyPolling() {
     if (this.spotifyPollInterval) clearInterval(this.spotifyPollInterval);
 
@@ -326,7 +366,10 @@ class LiveLyricsApp {
       const state = await spotifyClient.getCurrentlyPlaying();
       if (state) {
         this.isPlaying = state.isPlaying;
-        this.currentTime = state.progressMs / 1000;
+        this.togglePlayPauseUI(this.isPlaying);
+
+        // Latency-compensated Spotify playback time + user calibration offset
+        const liveSpotifyTime = (state.latencyCompensatedProgressMs / 1000) + this.syncOffset;
 
         const trackKey = `${state.trackName}-${state.artistName}`;
         if (trackKey !== lastTrackId) {
@@ -340,6 +383,8 @@ class LiveLyricsApp {
             this.dom.artworkIcon.classList.add('hidden');
           }
 
+          this.currentTime = Math.max(0, liveSpotifyTime);
+
           // Fetch lyrics from LRCLIB
           const lyrics = await fetchLyricsFromLRCLIB(
             state.trackName,
@@ -350,13 +395,23 @@ class LiveLyricsApp {
           if (lyrics) {
             this.currentTrack = lyrics;
             this.dom.totalDurationText.textContent = this.formatTime(lyrics.duration);
+            this.updateActiveFrame(true);
+          }
+        } else {
+          // Reconcile time: if seeked or skipped (> 0.45s difference), snap immediately!
+          const drift = liveSpotifyTime - this.currentTime;
+          if (Math.abs(drift) > 0.45) {
+            this.currentTime = Math.max(0, liveSpotifyTime);
+          } else if (Math.abs(drift) > 0.03) {
+            // Smoothly nudge clock forward/backward without jarring jumps
+            this.currentTime += drift * 0.25;
           }
         }
       }
     };
 
     poll();
-    this.spotifyPollInterval = setInterval(poll, 1000);
+    this.spotifyPollInterval = setInterval(poll, 750);
   }
 
   applyTapeColor(color) {
@@ -382,14 +437,21 @@ class LiveLyricsApp {
 
   togglePlayback(play) {
     this.isPlaying = play;
+    this.togglePlayPauseUI(this.isPlaying);
     if (this.isPlaying) {
-      this.dom.playPauseIcon.innerHTML = `<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
       if (this.mode === 'demo' && !this.audioMuted) {
         demoAudio.startBeat(90);
       }
     } else {
-      this.dom.playPauseIcon.innerHTML = `<svg class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
       demoAudio.stopBeat();
+    }
+  }
+
+  togglePlayPauseUI(playing) {
+    if (playing) {
+      this.dom.playPauseIcon.innerHTML = `<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+    } else {
+      this.dom.playPauseIcon.innerHTML = `<svg class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
     }
   }
 
@@ -430,14 +492,16 @@ class LiveLyricsApp {
     this.dom.currentTimeText.textContent = this.formatTime(this.currentTime);
   }
 
-  // Primary animation loop
+  // Primary 60fps/120fps animation loop
   renderLoop(timestamp) {
     const delta = (timestamp - this.lastFrameTime) / 1000;
     this.lastFrameTime = timestamp;
 
-    if (this.isPlaying && this.mode === 'demo') {
+    // Both Demo AND Live Spotify progress smoothly in the local render loop!
+    if (this.isPlaying) {
       this.currentTime += delta;
-      if (this.currentTime >= (this.currentTrack.duration || 34)) {
+      const total = this.currentTrack.duration || 34;
+      if (this.mode === 'demo' && this.currentTime >= total) {
         this.currentTime = 0; // Loop demo
       }
       this.updateScrubber();
@@ -472,30 +536,33 @@ class LiveLyricsApp {
     );
 
     if (frameIdx === -1) {
-      // Fallback to closest frame
       if (this.currentTime >= frames[frames.length - 1].endTime) {
         frameIdx = frames.length - 1;
       } else {
-        frameIdx = 0;
+        const nextIdx = frames.findIndex((f) => f.startTime > this.currentTime);
+        frameIdx = nextIdx > 0 ? nextIdx - 1 : 0;
       }
     }
 
-    // If frame changed, rebuild DOM nodes for lines and words
+    // If frame changed, rebuild DOM nodes for lines and words with entering animation
     if (frameIdx !== this.activeFrameIndex || forceRebuild) {
       this.activeFrameIndex = frameIdx;
       this.buildFrameDOM(frames[frameIdx]);
     }
 
-    // Now update exact word-for-word highlight state inside the active frame
+    // Update exact word-for-word highlight state inside the active frame
     this.updateWordHighlights(frames[frameIdx]);
   }
 
   // Construct DOM for a stacked kinetic frame
   buildFrameDOM(frame) {
     this.dom.lineStack.innerHTML = '';
+    this.dom.lineStack.classList.remove('frame-entering');
+    void this.dom.lineStack.offsetWidth; // Force reflow to replay smooth entrance animation
+    this.dom.lineStack.classList.add('frame-entering');
 
     const numLines = frame.lines.length;
-    // Calculate display font size based on number of stacked lines and length
+    // Calculate display font size based on number of stacked lines and word density
     let fontSizeClass = 'text-5xl sm:text-7xl md:text-8xl';
     if (numLines >= 3) {
       fontSizeClass = 'text-4xl sm:text-6xl md:text-7xl';
@@ -506,7 +573,7 @@ class LiveLyricsApp {
       lineEl.className = `kinetic-line ${fontSizeClass} font-black tracking-tight font-['Plus_Jakarta_Sans'] flex items-center justify-center flex-wrap`;
       lineEl.id = `line-${line.id || lineIdx}`;
 
-      // Fisheye 3D convex curvature calculation based on vertical line index
+      // Fisheye 3D convex curvature calculation based on vertical line position
       if (this.fisheyeEnabled && this.fisheyeIntensity > 0) {
         const centerOffset = lineIdx - (numLines - 1) / 2;
         const curveZ = Math.cos(centerOffset * 0.9) * 35 * this.fisheyeIntensity;
@@ -519,7 +586,7 @@ class LiveLyricsApp {
       line.words.forEach((word, wordIdx) => {
         const wordEl = document.createElement('div');
         wordEl.className = 'word-item relative inline-flex items-center justify-center';
-        wordEl.dataset.wordId = `${line.id || lineIdx}-${wordIdx}`;
+        wordEl.id = `word-${frame.id}-${line.id || lineIdx}-${wordIdx}`;
         wordEl.dataset.startTime = word.time.toString();
         wordEl.dataset.duration = (word.duration || 0.6).toString();
         wordEl.dataset.isTape = word.isTape ? 'true' : 'false';
@@ -529,7 +596,7 @@ class LiveLyricsApp {
 
         // Contextual Icon before text if requested
         if (word.icon && ICON_SVGS[word.icon] && word.icon !== 'heart') {
-          innerContent += `<span class="word-glyph">${ICON_SVGS[word.icon]}</span>`;
+          innerContent += `<span class="word-glyph mr-1">${ICON_SVGS[word.icon]}</span>`;
         }
 
         // Text with tape sticker styling or raw text
@@ -541,7 +608,7 @@ class LiveLyricsApp {
 
         // Heart or trailing icon
         if (word.icon === 'heart' && ICON_SVGS.heart) {
-          innerContent += `<span class="word-glyph">${ICON_SVGS.heart}</span>`;
+          innerContent += `<span class="word-glyph ml-1">${ICON_SVGS.heart}</span>`;
         }
 
         wordEl.innerHTML = innerContent;
@@ -552,17 +619,15 @@ class LiveLyricsApp {
     });
   }
 
-  // Exact Word-for-Word highlighting logic
+  // Exact Word-for-Word highlighting logic with CSS-accelerated transitions
   updateWordHighlights(frame) {
     const wordElements = this.dom.lineStack.querySelectorAll('.word-item');
-    let currentActiveWordFound = false;
+    let activeWordText = null;
 
     wordElements.forEach((el) => {
       const startTime = parseFloat(el.dataset.startTime);
       const duration = parseFloat(el.dataset.duration);
       const endTime = startTime + duration;
-      const isTape = el.dataset.isTape === 'true';
-      const angle = parseFloat(el.dataset.angle) || 0;
 
       const isCurrentActive = this.currentTime >= startTime && this.currentTime < endTime;
       const hasAlreadyPassed = this.currentTime >= endTime;
@@ -570,47 +635,35 @@ class LiveLyricsApp {
       const tapeBadge = el.querySelector('.tape-sticker');
 
       if (isCurrentActive) {
-        currentActiveWordFound = true;
-        el.classList.add('word-active');
-        el.classList.remove('word-sung');
-
-        // Dynamic 3D fisheye pop: exact word bulges outward toward the screen!
-        const bulgeZ = this.fisheyeEnabled ? 48 * this.fisheyeIntensity : 24;
-        const scaleVal = 1.15 + (this.fisheyeEnabled ? 0.08 * this.fisheyeIntensity : 0);
-
-        el.style.transform = `scale(${scaleVal}) translateZ(${bulgeZ}px)`;
-
-        if (tapeBadge) {
-          tapeBadge.classList.add('active-sticker');
-          tapeBadge.style.transform = `rotate(${angle}deg) scale(1.16) translateZ(12px)`;
+        if (!el.classList.contains('word-active')) {
+          el.classList.add('word-active', 'just-activated');
+          el.classList.remove('word-sung');
+          if (tapeBadge) tapeBadge.classList.add('active-sticker');
+          setTimeout(() => el.classList.remove('just-activated'), 300);
         }
-
-        // Update active word label in bottom status bar
-        const rawText = el.querySelector('.word-text')?.textContent || tapeBadge?.textContent || '';
-        this.dom.activeWordLabel.textContent = `▶ ${rawText}`;
+        activeWordText = el.querySelector('.word-text')?.textContent || tapeBadge?.textContent || '';
       } else if (hasAlreadyPassed) {
-        el.classList.remove('word-active');
-        el.classList.add('word-sung');
-        el.style.transform = `scale(1) translateZ(12px)`;
-
-        if (tapeBadge) {
-          tapeBadge.classList.remove('active-sticker');
-          tapeBadge.style.transform = `rotate(${angle}deg) scale(1)`;
+        if (!el.classList.contains('word-sung')) {
+          el.classList.remove('word-active', 'just-activated');
+          el.classList.add('word-sung');
+          if (tapeBadge) tapeBadge.classList.remove('active-sticker');
         }
       } else {
         // Future / Upcoming word
-        el.classList.remove('word-active', 'word-sung');
-        el.style.transform = `scale(0.96) translateZ(0px)`;
-
-        if (tapeBadge) {
-          tapeBadge.classList.remove('active-sticker');
-          tapeBadge.style.transform = `rotate(${angle}deg) scale(0.96)`;
+        if (el.classList.contains('word-active') || el.classList.contains('word-sung')) {
+          el.classList.remove('word-active', 'word-sung', 'just-activated');
+          if (tapeBadge) tapeBadge.classList.remove('active-sticker');
         }
       }
     });
 
-    if (!currentActiveWordFound && wordElements.length > 0) {
-      // If between beats or at end of phrase, keep status clean
+    if (activeWordText) {
+      this.dom.activeWordLabel.textContent = `▶ ${activeWordText}`;
+    } else if (frame && frame.isIntro) {
+      this.dom.activeWordLabel.textContent = 'Intro';
+    } else if (frame && frame.isInterlude) {
+      this.dom.activeWordLabel.textContent = 'Interlude';
+    } else {
       this.dom.activeWordLabel.textContent = 'Live Sync';
     }
   }

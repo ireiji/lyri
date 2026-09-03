@@ -163,6 +163,7 @@ export class SpotifyClient {
     }
 
     try {
+      const startTime = performance.now();
       const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
         headers: {
           Authorization: `Bearer ${this.accessToken}`,
@@ -176,15 +177,21 @@ export class SpotifyClient {
       const data = await response.json();
       if (!data || !data.item) return null;
 
+      const roundTripMs = performance.now() - startTime;
+      const now = Date.now();
+      // Estimate delay between Spotify server measurement and client receive time
+      const serverAgeMs = data.timestamp ? Math.max(0, Math.min(3000, now - data.timestamp)) : (roundTripMs / 2);
+
       return {
         isPlaying: data.is_playing,
         progressMs: data.progress_ms,
+        latencyCompensatedProgressMs: data.is_playing ? data.progress_ms + serverAgeMs : data.progress_ms,
         durationMs: data.item.duration_ms,
         trackName: data.item.name,
         artistName: data.item.artists.map((a) => a.name).join(', '),
         albumName: data.item.album ? data.item.album.name : '',
         albumArt: data.item.album?.images?.[0]?.url || null,
-        timestamp: Date.now(),
+        timestamp: now,
       };
     } catch (err) {
       console.warn('Spotify fetch player failed:', err);
