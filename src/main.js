@@ -563,14 +563,18 @@ class LiveLyricsApp {
 
     const numLines = frame.lines.length;
     // Calculate display font size based on number of stacked lines and word density
-    let fontSizeClass = 'text-5xl sm:text-7xl md:text-8xl';
-    if (numLines >= 3) {
-      fontSizeClass = 'text-4xl sm:text-6xl md:text-7xl';
+    let fontSizeClass = 'text-7xl sm:text-8xl md:text-9xl';
+    if (numLines === 1) {
+      fontSizeClass = 'text-8xl sm:text-9xl md:text-[10.5rem]';
+    } else if (numLines === 2) {
+      fontSizeClass = 'text-7xl sm:text-8xl md:text-9xl';
+    } else if (numLines >= 3) {
+      fontSizeClass = 'text-5xl sm:text-7xl md:text-8xl';
     }
 
     frame.lines.forEach((line, lineIdx) => {
       const lineEl = document.createElement('div');
-      lineEl.className = `kinetic-line ${fontSizeClass} font-black tracking-tight font-['Plus_Jakarta_Sans'] flex items-center justify-center flex-wrap`;
+      lineEl.className = `kinetic-line ${fontSizeClass} font-black tracking-tight font-['Plus_Jakarta_Sans'] flex items-center justify-center flex-wrap my-1`;
       lineEl.id = `line-${line.id || lineIdx}`;
 
       // Fisheye 3D convex curvature calculation based on vertical line position
@@ -594,21 +598,32 @@ class LiveLyricsApp {
 
         let innerContent = '';
 
-        // Contextual Icon before text if requested
-        if (word.icon && ICON_SVGS[word.icon] && word.icon !== 'heart') {
-          innerContent += `<span class="word-glyph mr-1">${ICON_SVGS[word.icon]}</span>`;
-        }
-
-        // Text with tape sticker styling or raw text
         if (word.isTape) {
-          innerContent += `<span class="tape-sticker" style="transform: rotate(${word.angle || -2.5}deg);">${word.text}</span>`;
-        } else {
-          innerContent += `<span class="word-text">${word.text}</span>`;
-        }
+          // Inside the tape sticker, enclosed icon takes the tape ink color
+          let badgeContent = '';
+          if (word.icon && ICON_SVGS[word.icon] && word.icon !== 'heart' && word.icon !== 'hand' && !word.iconTrailing) {
+            badgeContent += `<span class="word-glyph mr-2 inline-flex items-center">${ICON_SVGS[word.icon]}</span>`;
+          }
+          badgeContent += `<span class="word-text">${word.text}</span>`;
+          if ((word.icon === 'heart' || word.iconTrailing) && ICON_SVGS[word.icon]) {
+            badgeContent += `<span class="word-glyph ml-2 inline-flex items-center">${ICON_SVGS[word.icon]}</span>`;
+          }
 
-        // Heart or trailing icon
-        if (word.icon === 'heart' && ICON_SVGS.heart) {
-          innerContent += `<span class="word-glyph ml-1">${ICON_SVGS.heart}</span>`;
+          let preBadge = '';
+          if (word.icon === 'hand' && ICON_SVGS.hand) {
+            preBadge = `<span class="word-glyph mr-2.5 inline-flex items-center text-[#9c7a6e]">${ICON_SVGS.hand}</span>`;
+          }
+
+          innerContent = `${preBadge}<span class="tape-sticker" style="transform: rotate(${word.angle || -2.5}deg);">${badgeContent}</span>`;
+        } else {
+          let preIcon = '';
+          let postIcon = '';
+          if (word.icon && ICON_SVGS[word.icon] && word.icon !== 'heart' && !word.iconTrailing) {
+            preIcon = `<span class="word-glyph mr-2 inline-flex items-center">${ICON_SVGS[word.icon]}</span>`;
+          } else if ((word.icon === 'heart' || word.iconTrailing) && ICON_SVGS[word.icon]) {
+            postIcon = `<span class="word-glyph ml-2 inline-flex items-center">${ICON_SVGS[word.icon]}</span>`;
+          }
+          innerContent = `${preIcon}<span class="word-text">${word.text}</span>${postIcon}`;
         }
 
         wordEl.innerHTML = innerContent;
