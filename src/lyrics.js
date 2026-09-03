@@ -1,5 +1,164 @@
-// LRCLIB API Client and Enhanced Kinetic Synced Lyrics Parser
+// Unified Lyrics Engine: github.com/akashrchandran/spotify-lyrics-api + LRCLIB
 import { PAYPHONE_DEMO } from './data.js';
+
+/**
+ * Parses response from github.com/akashrchandran/spotify-lyrics-api
+ * Supports both format=raw (JSON lines with startTimeMs) and format=lrc (plain LRC string or JSON)
+ */
+export function parseSpotifyLyricsApiResponse(data, trackName, artistName, durationSec) {
+  if (!data) return null;
+
+  // 1. Plain text LRC string
+  if (typeof data === 'string' && (data.includes('[0') || data.includes('[1') || data.includes('[2') || data.includes(']'))) {
+    return parseLrcLyrics(data, trackName, artistName, durationSec);
+  }
+
+  // 2. Object with lines array (from spotify-lyrics-api format=raw or format=json)
+  const linesArray = data.lines || data.lyrics?.lines;
+  if (Array.isArray(linesArray) && linesArray.length > 0) {
+    const syncType = data.syncType || data.lyrics?.syncType;
+    if (syncType === 'UNSYNCED') {
+      const plainText = linesArray.map((l) => l.words || '').join('\n');
+      return synthesizeKineticFromPlain(plainText, trackName, artistName, durationSec || 180);
+    }
+
+    const lrcLines = linesArray
+      .filter((l) => l && typeof l.words === 'string' && l.words.trim() && l.words !== '♪')
+      .map((l) => {
+        const timeSec = (parseFloat(l.startTimeMs || 0)) / 1000;
+        const m = Math.floor(timeSec / 60);
+        const s = (timeSec % 60).toFixed(2);
+        return `[${m.toString().padStart(2, '0')}:${s.padStart(5, '0')}] ${l.words}`;
+      });
+
+    if (lrcLines.length > 0) {
+      return parseLrcLyrics(lrcLines.join('\n'), trackName, artistName, durationSec);
+    }
+  }
+
+  // 3. Object with nested lrc string or lyrics string
+  if (typeof data.lrc === 'string' && data.lrc.includes('[')) {
+    return parseLrcLyrics(data.lrc, trackName, artistName, durationSec);
+  }
+  if (typeof data.lyrics === 'string' && data.lyrics.includes('[')) {
+    return parseLrcLyrics(data.lyrics, trackName, artistName, durationSec);
+  }
+
+  return null;
+}
+
+/**
+ * Fetches lyrics directly from github.com/akashrchandran/spotify-lyrics-api
+ * Queries configured or local/public instances via trackid or url
+ */
+export async function fetchLyricsFromSpotifyLyricsApi(trackId, trackUrl, trackName, artistName, durationSec) {
+  if (!trackId && !trackUrl) return null;
+
+  const userCustomUrl = localStorage.getItem('spotify_lyrics_api_url');
+  const candidateBases = [];
+
+  if (userCustomUrl && userCustomUrl.trim()) {
+    candidateBases.push(userCustomUrl.trim().replace(/\/+$/, ''));
+  }
+
+  // Common local Docker and hosted endpoints for akashrchandran/spotify-lyrics-api
+  candidateBases.push('http://localhost:8080');
+  candidateBases.push('https://spotify-lyrics-api.vercel.app');
+  candidateBases.push('https://spotify-lyric-api-984e7b.herokuapp.com');
+
+  for (const base of candidateBases) {
+    const urlsToTry = [];
+    if (trackId) {
+      urlsToTry.push(`${base}/?trackid=${encodeURIComponent(trackId)}&format=raw`);
+      urlsToTry.push(`${base}/?trackid=${encodeURIComponent(trackId)}&format=lrc`);
+    }
+    if (trackUrl) {
+      urlsToTry.push(`${base}/?url=${encodeURIComponent(trackUrl)}&format=lrc`);
+    }
+
+    for (const targetUrl of urlsToTry) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        const res = await fetch(targetUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          let parsed = null;
+          if (contentType.includes('application/json')) {
+            const json = await res.json();
+            if (!json.error) {
+              parsed = parseSpotifyLyricsApiResponse(json, trackName, artistName, durationSec);
+            }
+          } else {
+            const text = await res.text();
+            if (text && !text.includes('<!DOCTYPE') && !text.includes('<html')) {
+              parsed = parseSpotifyLyricsApiResponse(text, trackName, artistName, durationSec);
+            }
+          }
+
+          if (parsed && parsed.frames && parsed.frames.length > 0) {
+            console.log(`[SpotifyLyricsAPI] Loaded synced lyrics for "${trackName}" from ${base}`);
+            parsed.source = 'spotify-lyrics-api';
+            return parsed;
+          }
+        }
+      } catch (e) {
+        // Continue trying next candidate
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Unified Lyric Fetcher: checks demo -> tries akashrchandran/spotify-lyrics-api -> falls back to LRCLIB
+ */
+export async function fetchTrackLyrics(trackName, artistName, albumName, durationSec, trackId, trackUrl) {
+  if (!trackName) return null;
+
+  const cleanTrack = trackName.toLowerCase();
+  const cleanArt = (artistName || '').toLowerCase();
+
+  // Instant perfect match for Jackie Brown / Payphone demo datasets
+  if (
+    (cleanTrack.includes('jackie brown') || (cleanArt.includes('brent faiyaz') && cleanTrack.includes('jackie'))) ||
+    (cleanTrack.includes('payphone') && cleanArt.includes('maroon'))
+  ) {
+    return {
+      ...PAYPHONE_DEMO,
+      title: trackName,
+      artist: artistName || PAYPHONE_DEMO.artist,
+      album: albumName || PAYPHONE_DEMO.album,
+      duration: durationSec || PAYPHONE_DEMO.duration,
+      source: 'demo',
+    };
+  }
+
+  // 1. Try github.com/akashrchandran/spotify-lyrics-api first as requested
+  if (trackId || trackUrl) {
+    try {
+      const spotifyLyrics = await fetchLyricsFromSpotifyLyricsApi(trackId, trackUrl, trackName, artistName, durationSec);
+      if (spotifyLyrics) {
+        return spotifyLyrics;
+      }
+    } catch (err) {
+      console.debug('Spotify lyrics api error:', err);
+    }
+  }
+
+  // 2. Seamless fallback to LRCLIB
+  const lrclibResult = await fetchLyricsFromLRCLIB(trackName, artistName, albumName, durationSec);
+  if (lrclibResult) {
+    lrclibResult.source = 'lrclib';
+    return lrclibResult;
+  }
+
+  return null;
+}
 
 export async function fetchLyricsFromLRCLIB(trackName, artistName, albumName, durationSec) {
   if (!trackName) return null;
@@ -312,12 +471,13 @@ export function parseLrcLyrics(lrcString, trackTitle, artist, expectedDuration) 
         const isTape = localIdx === tapeWordLocalIdx;
         const icon = getContextualIcon(wordText);
 
+        const wordAngle = isTape ? currentAngle : (localIdx % 2 === 0 ? -2.4 : 2.2);
         const wordObj = {
           text: wordText,
           time: wordStartInChunk,
           duration: wDuration,
           isTape,
-          angle: isTape ? currentAngle : 0,
+          angle: wordAngle,
           icon,
         };
 

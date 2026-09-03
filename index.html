@@ -53,6 +53,13 @@
           <span id="fisheye-status-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
         </button>
 
+        <!-- Highlighter Effect Mode Toggle (Current Word vs Key Word) -->
+        <button id="btn-highlighter-mode" title="Toggle Highlighter Mode (Active Word vs Key Word)" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#181514] border border-[#302a27] text-xs font-semibold text-[#eae4d9] hover:bg-[#24201e] transition active:scale-95 shadow-md">
+          <span class="w-2 h-2 rounded-full bg-[#c48890]"></span>
+          <span id="highlighter-mode-text" class="hidden sm:inline">Word Highlighter</span>
+          <span class="sm:hidden">Highlight</span>
+        </button>
+
         <!-- Audio Beat Mute/Unmute -->
         <button id="btn-toggle-audio" title="Mute/Unmute Rhythm Beat" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#181514] border border-[#302a27] text-xs font-semibold text-[#eae4d9] hover:bg-[#24201e] transition active:scale-95 shadow-md">
           <span id="audio-icon">🔊</span>
@@ -240,6 +247,23 @@
               <span id="sync-delay-val" class="w-14 text-center font-mono text-xs font-bold text-[#c48890]">0.0s</span>
               <button id="btn-sync-delay-add" title="Increase offset by 0.1s" class="w-7 h-7 bg-[#201c1a] hover:bg-[#2e2825] rounded-lg text-xs font-mono font-bold text-[#f4f1ea] transition active:scale-95 flex items-center justify-center">+</button>
             </div>
+          </div>
+          <!-- Spotify Lyrics API (akashrchandran/spotify-lyrics-api) -->
+          <div class="mt-1 flex flex-col gap-1.5 p-2.5 rounded-xl bg-[#0e0d0c] border border-[#26211e]">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span class="text-xs font-bold text-[#f4f1ea]">Spotify Lyrics API</span>
+              </div>
+              <a href="https://github.com/akashrchandran/spotify-lyrics-api" target="_blank" rel="noreferrer" class="text-[10px] text-[#c48890] hover:underline font-mono">akashrchandran/api</a>
+            </div>
+            <p class="text-[10px] text-[#8e8278] leading-tight">Queries your local or self-hosted instance first for line/word synced lyrics, with instant LRCLIB fallback.</p>
+            <div class="flex gap-1.5 pt-0.5">
+              <input id="input-lyrics-api-url" type="text" placeholder="http://localhost:8080 (or custom URL)" class="flex-1 px-2.5 py-1.5 bg-[#161312] border border-[#302a27] rounded-lg text-[11px] text-white font-mono focus:outline-none focus:border-[#c48890]" />
+              <button id="btn-save-lyrics-api" class="px-2.5 py-1.5 bg-[#25201e] hover:bg-[#332c28] border border-[#3b3430] text-[11px] font-semibold rounded-lg text-[#f4f1ea] transition active:scale-95">Save</button>
+              <button id="btn-test-lyrics-api" class="px-2.5 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 text-[11px] font-semibold rounded-lg text-emerald-300 transition active:scale-95">Test</button>
+            </div>
+            <span id="lyrics-api-status" class="text-[10px] text-[#73675e]">Default: http://localhost:8080 + public mirrors</span>
           </div>
         </div>
 
