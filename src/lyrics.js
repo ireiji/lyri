@@ -1,5 +1,203 @@
-// Unified Lyrics Engine: github.com/akashrchandran/spotify-lyrics-api + LRCLIB
+// Unified Lyrics Engine: BetterLyrics CF-API (github.com/better-lyrics/cf-api) + akashrchandran/spotify-lyrics-api + LRCLIB
 import { PAYPHONE_DEMO } from './data.js';
+
+/**
+ * Extracts YouTube Video ID from raw ID, standard YouTube URL, or YouTube Music URL
+ */
+export function extractYouTubeVideoId(input) {
+  if (!input || typeof input !== 'string') return null;
+  const trimmed = input.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+    return trimmed;
+  }
+  try {
+    const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+    if (url.hostname.includes('youtube.com')) {
+      const v = url.searchParams.get('v');
+      if (v) return v;
+    }
+    if (url.hostname.includes('youtu.be')) {
+      const id = url.pathname.replace(/^\/+/, '').split('/')[0];
+      if (id && id.length === 11) return id;
+    }
+  } catch (e) {}
+  const match = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Parses response from BetterLyrics CF-API (github.com/better-lyrics/cf-api)
+ * Supports Musixmatch richsync (word-level sync), standard LRC fetchedLyrics, lyrics, and LrcLib
+ */
+export function parseBetterLyricsApiResponse(data, fallbackTitle, fallbackArtist, fallbackDuration) {
+  if (!data) return null;
+
+  const title = data.song || data.title || data.trackName || fallbackTitle || 'Unknown Track';
+  const artist = data.artist || data.artistName || fallbackArtist || 'Unknown Artist';
+  const album = data.album || '';
+  const duration = (typeof data.duration === 'number' && data.duration > 0)
+    ? data.duration
+    : (fallbackDuration || 180);
+
+  // 1. Check Musixmatch richsync for high-precision word-by-word synchronized lyrics
+  let richsync = data.musixmatch?.richsync;
+  if (typeof richsync === 'string') {
+    try {
+      richsync = JSON.parse(richsync);
+    } catch (e) {}
+  }
+
+  if (Array.isArray(richsync) && richsync.length > 0) {
+    const lrcLines = [];
+    for (const item of richsync) {
+      const lineTime = typeof item.ts === 'number' ? item.ts : parseFloat(item.ts || 0);
+      const words = Array.isArray(item.l)
+        ? item.l.map((w) => w.c || '').join(' ').trim()
+        : (item.x || '');
+      if (words && words !== '♪') {
+        const m = Math.floor(lineTime / 60);
+        const s = (lineTime % 60).toFixed(2);
+        lrcLines.push(`[${m.toString().padStart(2, '0')}:${s.padStart(5, '0')}] ${words}`);
+      }
+    }
+    if (lrcLines.length > 0) {
+      const parsed = parseLrcLyrics(lrcLines.join('\n'), title, artist, duration);
+      if (parsed) {
+        parsed.source = 'better-lyrics-cf-api';
+        parsed.hasWordSync = true;
+        parsed.album = album;
+        return parsed;
+      }
+    }
+  }
+
+  // 2. Check fetchedLyrics (the primary LRC output from cf-api GetLyrics.ts)
+  if (typeof data.fetchedLyrics === 'string' && (data.fetchedLyrics.includes('[0') || data.fetchedLyrics.includes('[1') || data.fetchedLyrics.includes(']'))) {
+    const parsed = parseLrcLyrics(data.fetchedLyrics, title, artist, duration);
+    if (parsed) {
+      parsed.source = 'better-lyrics-cf-api';
+      parsed.album = album;
+      return parsed;
+    }
+  }
+
+  // 3. Check data.lyrics (string LRC or object with lines)
+  if (typeof data.lyrics === 'string' && (data.lyrics.includes('[0') || data.lyrics.includes(']'))) {
+    const parsed = parseLrcLyrics(data.lyrics, title, artist, duration);
+    if (parsed) {
+      parsed.source = 'better-lyrics-cf-api';
+      parsed.album = album;
+      return parsed;
+    }
+  } else if (data.lyrics && typeof data.lyrics === 'object') {
+    const parsed = parseSpotifyLyricsApiResponse(data.lyrics, title, artist, duration);
+    if (parsed) {
+      parsed.source = 'better-lyrics-cf-api';
+      parsed.album = album;
+      return parsed;
+    }
+  }
+
+  // 4. Check data.lrclib
+  if (data.lrclib) {
+    if (data.lrclib.syncedLyrics) {
+      const parsed = parseLrcLyrics(data.lrclib.syncedLyrics, title, artist, duration);
+      if (parsed) {
+        parsed.source = 'better-lyrics-cf-api';
+        parsed.album = album;
+        return parsed;
+      }
+    }
+    if (data.lrclib.plainLyrics) {
+      const parsed = synthesizeKineticFromPlain(data.lrclib.plainLyrics, title, artist, duration);
+      if (parsed) {
+        parsed.source = 'better-lyrics-cf-api';
+        parsed.album = album;
+        return parsed;
+      }
+    }
+  }
+
+  // 5. Check musixmatch body or subtitles
+  if (data.musixmatch?.lyrics?.body) {
+    const parsed = synthesizeKineticFromPlain(data.musixmatch.lyrics.body, title, artist, duration);
+    if (parsed) {
+      parsed.source = 'better-lyrics-cf-api';
+      parsed.album = album;
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Fetches lyrics from BetterLyrics Cloudflare Worker API (github.com/better-lyrics/cf-api)
+ * Accepts videoId (YouTube) or metadata (song, artist, album, duration)
+ */
+export async function fetchLyricsFromBetterLyricsCfApi({ videoId, song, artist, album, duration }) {
+  const customUrl = localStorage.getItem('better_lyrics_api_url');
+  const token = localStorage.getItem('better_lyrics_api_token');
+
+  // If no custom URL is configured and no YouTube videoId was given, return null to avoid unnecessary traffic
+  if (!customUrl && !videoId) return null;
+
+  const base = (customUrl && customUrl.trim()) ? customUrl.trim().replace(/\/+$/, '') : 'http://localhost:8787';
+
+  const queryParams = new URLSearchParams();
+  if (videoId) queryParams.set('videoId', videoId);
+  if (song) queryParams.set('song', song);
+  if (artist) queryParams.set('artist', artist);
+  if (album) queryParams.set('album', album);
+  if (duration) queryParams.set('duration', Math.round(duration).toString());
+
+  const targetUrl = `${base}/lyrics?${queryParams.toString()}`;
+
+  const headers = {};
+  if (token && token.trim()) {
+    headers['Authorization'] = `Bearer ${token.trim()}`;
+  }
+
+  const doAttempt = async (fetchUrl) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    try {
+      const res = await fetch(fetchUrl, {
+        headers,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) return null;
+      const json = await res.json();
+      return parseBetterLyricsApiResponse(json, song, artist, duration);
+    } catch (e) {
+      clearTimeout(timeoutId);
+      throw e;
+    }
+  };
+
+  try {
+    const result = await doAttempt(targetUrl);
+    if (result && result.frames && result.frames.length > 0) {
+      return result;
+    }
+  } catch (err) {
+    // If direct request is blocked by CORS from a remote worker domain, try via proxy fallback
+    if (base.startsWith('https://') || (base.startsWith('http://') && !base.includes('localhost') && !base.includes('127.0.0.1'))) {
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        const result = await doAttempt(proxyUrl);
+        if (result && result.frames && result.frames.length > 0) {
+          return result;
+        }
+      } catch (proxyErr) {
+        // Fallback silently
+      }
+    }
+  }
+
+  return null;
+}
 
 /**
  * Parses response from github.com/akashrchandran/spotify-lyrics-api
@@ -115,12 +313,12 @@ export async function fetchLyricsFromSpotifyLyricsApi(trackId, trackUrl, trackNa
 }
 
 /**
- * Unified Lyric Fetcher: checks demo -> tries akashrchandran/spotify-lyrics-api -> falls back to LRCLIB
+ * Unified Lyric Fetcher: checks demo -> tries BetterLyrics CF-API -> tries spotify-lyrics-api -> falls back to LRCLIB
  */
-export async function fetchTrackLyrics(trackName, artistName, albumName, durationSec, trackId, trackUrl) {
-  if (!trackName) return null;
+export async function fetchTrackLyrics(trackName, artistName, albumName, durationSec, trackId, trackUrl, videoId) {
+  if (!trackName && !videoId) return null;
 
-  const cleanTrack = trackName.toLowerCase();
+  const cleanTrack = (trackName || '').toLowerCase();
   const cleanArt = (artistName || '').toLowerCase();
 
   // Instant perfect match for Jackie Brown / Payphone demo datasets
@@ -130,7 +328,7 @@ export async function fetchTrackLyrics(trackName, artistName, albumName, duratio
   ) {
     return {
       ...PAYPHONE_DEMO,
-      title: trackName,
+      title: trackName || PAYPHONE_DEMO.title,
       artist: artistName || PAYPHONE_DEMO.artist,
       album: albumName || PAYPHONE_DEMO.album,
       duration: durationSec || PAYPHONE_DEMO.duration,
@@ -138,7 +336,26 @@ export async function fetchTrackLyrics(trackName, artistName, albumName, duratio
     };
   }
 
-  // 1. Try github.com/akashrchandran/spotify-lyrics-api first as requested
+  // 1. Try BetterLyrics CF-API (github.com/better-lyrics/cf-api) if configured or if videoId is provided
+  const cfApiConfigured = localStorage.getItem('better_lyrics_api_url');
+  if (cfApiConfigured || videoId) {
+    try {
+      const cfLyrics = await fetchLyricsFromBetterLyricsCfApi({
+        videoId,
+        song: trackName,
+        artist: artistName,
+        album: albumName,
+        duration: durationSec,
+      });
+      if (cfLyrics) {
+        return cfLyrics;
+      }
+    } catch (err) {
+      console.debug('BetterLyrics CF-API attempt error:', err);
+    }
+  }
+
+  // 2. Try github.com/akashrchandran/spotify-lyrics-api if configured
   if (trackId || trackUrl) {
     try {
       const spotifyLyrics = await fetchLyricsFromSpotifyLyricsApi(trackId, trackUrl, trackName, artistName, durationSec);
@@ -150,7 +367,7 @@ export async function fetchTrackLyrics(trackName, artistName, albumName, duratio
     }
   }
 
-  // 2. Seamless fallback to LRCLIB
+  // 3. Seamless fallback to LRCLIB
   const lrclibResult = await fetchLyricsFromLRCLIB(trackName, artistName, albumName, durationSec);
   if (lrclibResult) {
     lrclibResult.source = 'lrclib';

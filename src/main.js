@@ -3,7 +3,13 @@ import './index.css';
 import { PAYPHONE_DEMO, ICON_SVGS } from './data.js';
 import { demoAudio } from './synth.js';
 import { spotifyClient } from './spotify.js';
-import { fetchTrackLyrics, fetchLyricsFromLRCLIB, parseLrcLyrics } from './lyrics.js';
+import {
+  fetchTrackLyrics,
+  fetchLyricsFromLRCLIB,
+  fetchLyricsFromBetterLyricsCfApi,
+  extractYouTubeVideoId,
+  parseLrcLyrics,
+} from './lyrics.js';
 
 class LiveLyricsApp {
   constructor() {
@@ -80,6 +86,12 @@ class LiveLyricsApp {
       btnSyncDelaySub: document.getElementById('btn-sync-delay-sub'),
       btnSyncDelayAdd: document.getElementById('btn-sync-delay-add'),
       syncDelayVal: document.getElementById('sync-delay-val'),
+      inputCfApiUrl: document.getElementById('input-cf-api-url'),
+      btnSaveCfApi: document.getElementById('btn-save-cf-api'),
+      btnTestCfApi: document.getElementById('btn-test-cf-api'),
+      inputCfApiToken: document.getElementById('input-cf-api-token'),
+      btnSaveCfToken: document.getElementById('btn-save-cf-token'),
+      cfApiStatus: document.getElementById('cf-api-status'),
       inputLyricsApiUrl: document.getElementById('input-lyrics-api-url'),
       btnSaveLyricsApi: document.getElementById('btn-save-lyrics-api'),
       btnTestLyricsApi: document.getElementById('btn-test-lyrics-api'),
@@ -274,6 +286,106 @@ class LiveLyricsApp {
       });
     }
 
+    // BetterLyrics CF-API Configuration (github.com/better-lyrics/cf-api)
+    if (this.dom.inputCfApiUrl) {
+      const savedCfUrl = localStorage.getItem('better_lyrics_api_url') || '';
+      this.dom.inputCfApiUrl.value = savedCfUrl;
+      if (this.dom.cfApiStatus) {
+        if (savedCfUrl) {
+          this.dom.cfApiStatus.textContent = `Active instance: ${savedCfUrl}`;
+          this.dom.cfApiStatus.className = 'text-[10px] text-cyan-400 font-mono';
+        } else {
+          this.dom.cfApiStatus.textContent = 'Not configured (optional — direct LRCLIB used when omitted)';
+          this.dom.cfApiStatus.className = 'text-[10px] text-[#73675e]';
+        }
+      }
+    }
+
+    if (this.dom.inputCfApiToken) {
+      this.dom.inputCfApiToken.value = localStorage.getItem('better_lyrics_api_token') || '';
+    }
+
+    if (this.dom.btnSaveCfApi) {
+      this.dom.btnSaveCfApi.addEventListener('click', () => {
+        const url = this.dom.inputCfApiUrl.value.trim();
+        if (url) {
+          localStorage.setItem('better_lyrics_api_url', url);
+          this.dom.cfApiStatus.textContent = `✓ Saved BetterLyrics instance: ${url}`;
+          this.dom.cfApiStatus.className = 'text-[10px] text-cyan-400 font-mono';
+        } else {
+          localStorage.removeItem('better_lyrics_api_url');
+          this.dom.cfApiStatus.textContent = 'Not configured (optional — direct LRCLIB used when omitted)';
+          this.dom.cfApiStatus.className = 'text-[10px] text-[#73675e]';
+        }
+      });
+    }
+
+    if (this.dom.btnSaveCfToken) {
+      this.dom.btnSaveCfToken.addEventListener('click', () => {
+        const token = this.dom.inputCfApiToken.value.trim();
+        if (token) {
+          localStorage.setItem('better_lyrics_api_token', token);
+          this.dom.cfApiStatus.textContent = '✓ Saved JWT token for BetterLyrics worker';
+          this.dom.cfApiStatus.className = 'text-[10px] text-cyan-400 font-mono';
+        } else {
+          localStorage.removeItem('better_lyrics_api_token');
+          this.dom.cfApiStatus.textContent = 'Bearer token removed';
+          this.dom.cfApiStatus.className = 'text-[10px] text-[#8e8278]';
+        }
+      });
+    }
+
+    if (this.dom.btnTestCfApi) {
+      this.dom.btnTestCfApi.addEventListener('click', async () => {
+        const inputVal = this.dom.inputCfApiUrl.value.trim();
+        const tokenVal = this.dom.inputCfApiToken ? this.dom.inputCfApiToken.value.trim() : '';
+        const url = (inputVal || 'http://localhost:8787').replace(/\/+$/, '');
+        this.dom.cfApiStatus.textContent = `Connecting to BetterLyrics worker at ${url}...`;
+        this.dom.cfApiStatus.className = 'text-[10px] text-cyan-400';
+
+        const headers = {};
+        if (tokenVal) headers['Authorization'] = `Bearer ${tokenVal}`;
+
+        let success = false;
+        let note = '';
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const res = await fetch(`${url}/lyrics?song=Payphone&artist=Maroon%205`, {
+            headers,
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            success = true;
+          } else if (res.status === 401 || res.status === 403) {
+            note = '(Turnstile challenge or JWT token required)';
+          } else {
+            note = `(Server returned ${res.status})`;
+          }
+        } catch (e) {
+          if (url.startsWith('https://') || (url.startsWith('http://') && !url.includes('localhost') && !url.includes('127.0.0.1'))) {
+            try {
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`${url}/lyrics?song=Payphone&artist=Maroon%205`)}`;
+              const pRes = await fetch(proxyUrl);
+              if (pRes.ok) {
+                success = true;
+                note = '(connected via proxy fallback)';
+              }
+            } catch (pe) {}
+          }
+        }
+
+        if (success) {
+          this.dom.cfApiStatus.textContent = `✓ BetterLyrics CF-API connected! ${note}`;
+          this.dom.cfApiStatus.className = 'text-[10px] text-cyan-400 font-bold';
+        } else {
+          this.dom.cfApiStatus.textContent = `Could not reach ${url} ${note}. Ensure wrangler dev or worker is active.`;
+          this.dom.cfApiStatus.className = 'text-[10px] text-amber-400';
+        }
+      });
+    }
+
     // Spotify Lyrics API Configuration (akashrchandran/spotify-lyrics-api)
     if (this.dom.inputLyricsApiUrl) {
       const savedApiUrl = localStorage.getItem('spotify_lyrics_api_url') || '';
@@ -353,28 +465,70 @@ class LiveLyricsApp {
       });
     }
 
-    // LRCLIB Manual Search
-    this.dom.btnSearchLyrics.addEventListener('click', async () => {
-      const query = this.dom.inputSongSearch.value.trim();
+    // Unified Lyrics Search (BetterLyrics CF-API + LRCLIB + YouTube Video ID)
+    const executeLyricsSearch = async (rawQuery) => {
+      const query = (rawQuery || this.dom.inputSongSearch.value).trim();
       if (!query) return;
 
-      this.dom.searchStatusText.textContent = 'Searching LRCLIB synced lyrics...';
-      const parts = query.split(' - ');
-      const title = parts[0] || query;
-      const artist = parts[1] || '';
+      this.dom.searchStatusText.textContent = 'Searching lyrics...';
+      this.dom.searchStatusText.className = 'text-[10px] text-cyan-400 font-medium';
 
-      const parsed = await fetchLyricsFromLRCLIB(title, artist, null, null);
-      if (parsed && parsed.frames.length > 0) {
+      // 1. Check if input is a YouTube URL or direct Video ID
+      const youtubeId = extractYouTubeVideoId(query);
+      let parsed = null;
+
+      if (youtubeId) {
+        this.dom.searchStatusText.textContent = `Querying BetterLyrics CF-API for video [${youtubeId}]...`;
+        parsed = await fetchTrackLyrics(null, null, null, null, null, null, youtubeId);
+      }
+
+      // 2. If not a YouTube ID or no lyrics found yet, search by song & artist
+      if (!parsed) {
+        const parts = query.split(' - ');
+        const title = parts[0] || query;
+        const artist = parts[1] || '';
+        parsed = await fetchTrackLyrics(title, artist, null, null, null, null, null);
+      }
+
+      if (parsed && parsed.frames && parsed.frames.length > 0) {
         this.currentTrack = parsed;
         this.seekTo(0);
         this.updateTrackMetadata();
-        this.dom.searchStatusText.textContent = `Loaded ${parsed.frames.length} phrases!`;
+        const srcLabel = parsed.source === 'better-lyrics-cf-api'
+          ? 'BetterLyrics CF-API'
+          : (parsed.source === 'spotify-lyrics-api' ? 'Spotify API' : (parsed.source === 'demo' ? 'Demo' : 'LRCLIB'));
+        this.dom.searchStatusText.textContent = `✓ Loaded ${parsed.frames.length} phrases from ${srcLabel}!`;
+        this.dom.searchStatusText.className = 'text-[10px] text-emerald-400 font-bold';
         setTimeout(() => {
           this.dom.settingsModal.classList.add('hidden');
-        }, 1000);
+        }, 1100);
       } else {
-        this.dom.searchStatusText.textContent = 'No synced lyrics found for this song.';
+        this.dom.searchStatusText.textContent = 'No synced lyrics found. Try another title or check your BetterLyrics URL.';
+        this.dom.searchStatusText.className = 'text-[10px] text-amber-400';
       }
+    };
+
+    if (this.dom.btnSearchLyrics) {
+      this.dom.btnSearchLyrics.addEventListener('click', () => executeLyricsSearch());
+    }
+
+    if (this.dom.inputSongSearch) {
+      this.dom.inputSongSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          executeLyricsSearch();
+        }
+      });
+    }
+
+    // Quick suggestion search pills
+    document.querySelectorAll('.quick-song-pill').forEach((pill) => {
+      pill.addEventListener('click', () => {
+        const query = pill.getAttribute('data-query');
+        if (query && this.dom.inputSongSearch) {
+          this.dom.inputSongSearch.value = query;
+          executeLyricsSearch(query);
+        }
+      });
     });
 
     // Spacebar Play/Pause
@@ -502,8 +656,15 @@ class LiveLyricsApp {
           if (lyrics) {
             this.currentTrack = lyrics;
             this.dom.totalDurationText.textContent = this.formatTime(lyrics.duration);
-            const sourceLabel = lyrics.source === 'spotify-lyrics-api' ? 'Spotify API' : (lyrics.source === 'demo' ? 'Demo' : 'LRCLIB');
+            const sourceLabel = lyrics.source === 'better-lyrics-cf-api'
+              ? 'BetterLyrics CF-API'
+              : (lyrics.source === 'spotify-lyrics-api' ? 'Spotify API' : (lyrics.source === 'demo' ? 'Demo' : 'LRCLIB'));
             this.dom.modeBadge.textContent = `Live Spotify • ${sourceLabel}`;
+            if (lyrics.source === 'better-lyrics-cf-api') {
+              this.dom.modeBadge.className = 'text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+            } else {
+              this.dom.modeBadge.className = 'text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/30';
+            }
             this.updateActiveFrame(true);
           }
         } else {
@@ -585,6 +746,21 @@ class LiveLyricsApp {
     this.dom.trackTitleText.textContent = this.currentTrack.title || 'Unknown Track';
     this.dom.trackArtistText.textContent = this.currentTrack.artist || 'Unknown Artist';
     this.dom.totalDurationText.textContent = this.formatTime(this.currentTrack.duration || 34);
+
+    const src = this.currentTrack.source;
+    if (src === 'better-lyrics-cf-api') {
+      this.dom.modeBadge.textContent = 'BetterLyrics CF-API';
+      this.dom.modeBadge.className = 'text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+    } else if (src === 'lrclib') {
+      this.dom.modeBadge.textContent = 'LRCLIB Synced';
+      this.dom.modeBadge.className = 'text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30';
+    } else if (this.mode === 'spotify') {
+      this.dom.modeBadge.textContent = 'Live Spotify';
+      this.dom.modeBadge.className = 'text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/30';
+    } else {
+      this.dom.modeBadge.textContent = 'Demo Mode';
+      this.dom.modeBadge.className = 'text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-[#3b3430] text-[#f4f1ea] border border-[#524843]';
+    }
   }
 
   formatTime(sec) {

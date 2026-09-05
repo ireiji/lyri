@@ -1,6 +1,6 @@
 {
   "name": "Live Lyrics",
-  "description": "Live Spotify-synced kinetic typography lyrics with tape cutout stickers and animated glyphs.",
+  "description": "Live Spotify-synced kinetic typography lyrics with word-by-word animation, tape cutout stickers, and authentic fisheye lens effect.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

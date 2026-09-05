@@ -248,6 +248,28 @@
               <button id="btn-sync-delay-add" title="Increase offset by 0.1s" class="w-7 h-7 bg-[#201c1a] hover:bg-[#2e2825] rounded-lg text-xs font-mono font-bold text-[#f4f1ea] transition active:scale-95 flex items-center justify-center">+</button>
             </div>
           </div>
+          <!-- BetterLyrics CF-API (github.com/better-lyrics/cf-api) -->
+          <div class="mt-1 flex flex-col gap-1.5 p-2.5 rounded-xl bg-[#0e0d0c] border border-[#26211e]">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                <span class="text-xs font-bold text-[#f4f1ea]">BetterLyrics CF-API</span>
+              </div>
+              <a href="https://github.com/better-lyrics/cf-api" target="_blank" rel="noreferrer" class="text-[10px] text-cyan-400 hover:underline font-mono">better-lyrics/cf-api</a>
+            </div>
+            <p class="text-[10px] text-[#8e8278] leading-tight">Cloudflare Worker API with Musixmatch rich word-sync, YouTube videoId lookup, and LRCLIB integration.</p>
+            <div class="flex gap-1.5 pt-0.5">
+              <input id="input-cf-api-url" type="text" placeholder="Worker URL (e.g. http://localhost:8787 or https://...workers.dev)" class="flex-1 px-2.5 py-1.5 bg-[#161312] border border-[#302a27] rounded-lg text-[11px] text-white font-mono focus:outline-none focus:border-cyan-400" />
+              <button id="btn-save-cf-api" class="px-2.5 py-1.5 bg-[#25201e] hover:bg-[#332c28] border border-[#3b3430] text-[11px] font-semibold rounded-lg text-[#f4f1ea] transition active:scale-95">Save</button>
+              <button id="btn-test-cf-api" class="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-[11px] font-semibold rounded-lg text-cyan-300 transition active:scale-95">Test</button>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input id="input-cf-api-token" type="password" placeholder="Optional Bearer/JWT Token (if Turnstile auth enabled)" class="flex-1 px-2.5 py-1.5 bg-[#161312] border border-[#2a2422] rounded-lg text-[10px] text-white font-mono focus:outline-none focus:border-cyan-400" />
+              <button id="btn-save-cf-token" class="px-2.5 py-1.5 bg-[#25201e] hover:bg-[#332c28] border border-[#3b3430] text-[10px] font-semibold rounded-lg text-[#f4f1ea] transition active:scale-95">Save Token</button>
+            </div>
+            <span id="cf-api-status" class="text-[10px] text-[#73675e]">Not configured (optional — direct LRCLIB used when omitted)</span>
+          </div>
+
           <!-- Spotify Lyrics API (akashrchandran/spotify-lyrics-api) -->
           <div class="mt-1 flex flex-col gap-1.5 p-2.5 rounded-xl bg-[#0e0d0c] border border-[#26211e]">
             <div class="flex items-center justify-between">
@@ -267,12 +289,19 @@
           </div>
         </div>
 
-        <!-- Manual LRCLIB Song Search Section -->
+        <!-- Manual Lyrics & YouTube Search Section -->
         <div class="pt-2 border-t border-[#292421] flex flex-col gap-2">
-          <label class="text-[11px] font-semibold text-[#8e8278]">Or Search Any Song (LRCLIB Synced Lyrics)</label>
+          <label class="text-[11px] font-semibold text-[#8e8278]">Search Any Song or YouTube Video (BetterLyrics / LRCLIB)</label>
           <div class="flex gap-2">
-            <input id="input-song-search" type="text" placeholder="Song & Artist (e.g. Blinding Lights The Weeknd)" class="flex-1 px-3 py-2 bg-[#0d0c0c] border border-[#2f2926] rounded-xl text-xs text-white focus:outline-none focus:border-[#c48890]" />
+            <input id="input-song-search" type="text" placeholder="Song & Artist or YouTube URL / Video ID" class="flex-1 px-3 py-2 bg-[#0d0c0c] border border-[#2f2926] rounded-xl text-xs text-white focus:outline-none focus:border-[#c48890]" />
             <button id="btn-search-lyrics" class="px-3 py-2 bg-[#25201e] hover:bg-[#332c28] border border-[#3b3430] text-xs font-semibold rounded-xl text-[#f4f1ea] transition active:scale-95">Load</button>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[9px] text-[#6d625a]">Try:</span>
+            <button class="quick-song-pill px-2 py-0.5 rounded-md bg-[#181514] hover:bg-[#25201e] border border-[#2e2825] text-[10px] text-[#b3a89f] transition" data-query="Jackie Brown - Brent Faiyaz">Jackie Brown</button>
+            <button class="quick-song-pill px-2 py-0.5 rounded-md bg-[#181514] hover:bg-[#25201e] border border-[#2e2825] text-[10px] text-[#b3a89f] transition" data-query="Payphone - Maroon 5">Payphone</button>
+            <button class="quick-song-pill px-2 py-0.5 rounded-md bg-[#181514] hover:bg-[#25201e] border border-[#2e2825] text-[10px] text-[#b3a89f] transition" data-query="Blinding Lights - The Weeknd">Blinding Lights</button>
+            <button class="quick-song-pill px-2 py-0.5 rounded-md bg-[#181514] hover:bg-[#25201e] border border-[#2e2825] text-[10px] text-[#b3a89f] transition" data-query="Stay With Me - Sam Smith">Stay With Me</button>
           </div>
           <span id="search-status-text" class="text-[10px] text-[#73675e]"></span>
         </div>
