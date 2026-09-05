@@ -46,6 +46,13 @@
 
       <!-- Quick Action Controls -->
       <div class="flex items-center gap-2">
+        <!-- Word-by-Word Studio Modal Button (eLRC / TTML / Poweramp) -->
+        <button id="btn-open-wordsync" title="Word-by-Word Lyrics Studio (Poweramp eLRC, TTML & Syllable Sync)" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1f1a1c] border border-[#422d35] text-xs font-semibold text-[#f0d8dc] hover:bg-[#2c2025] hover:border-[#c48890]/60 transition active:scale-95 shadow-md group">
+          <span class="w-2 h-2 rounded-full bg-[#c48890] animate-pulse"></span>
+          <span class="text-xs font-bold text-[#f4d7dc]">Word-Sync</span>
+          <span id="word-sync-format-badge" class="px-1.5 py-0.5 bg-[#c48890]/25 text-[#f4bcc3] rounded text-[9px] font-mono font-bold">eLRC</span>
+        </button>
+
         <!-- Fisheye Quick Toggle -->
         <button id="btn-toggle-fisheye" title="Toggle Fisheye Lens Effect" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#181514] border border-[#302a27] text-xs font-semibold text-[#eae4d9] hover:bg-[#24201e] transition active:scale-95 shadow-md">
           <span class="text-[#c48890]">👁️</span>
@@ -304,6 +311,163 @@
             <button class="quick-song-pill px-2 py-0.5 rounded-md bg-[#181514] hover:bg-[#25201e] border border-[#2e2825] text-[10px] text-[#b3a89f] transition" data-query="Stay With Me - Sam Smith">Stay With Me</button>
           </div>
           <span id="search-status-text" class="text-[10px] text-[#73675e]"></span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Word-by-Word Studio Modal (Poweramp eLRC, Apple Music TTML & Richsync) -->
+    <div id="wordsync-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-3 sm:p-5">
+      <div class="bg-[#141212] border border-[#3b2b31] rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl relative flex flex-col overflow-hidden text-[#f4f1ea]">
+        
+        <!-- Modal Top Bar -->
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-[#2d2327] bg-[#1a1518]/90">
+          <div class="flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#c48890] animate-pulse"></span>
+            <div>
+              <h3 class="text-sm font-black text-[#f4d7dc] tracking-tight">Word-by-Word Lyrics Studio</h3>
+              <p class="text-[10px] text-[#a8959b]">Poweramp eLRC, Apple Music TTML & Musixmatch Richsync Engine</p>
+            </div>
+          </div>
+          <button id="btn-close-wordsync" class="text-[#8e8278] hover:text-white p-1 rounded-lg text-sm transition">✕</button>
+        </div>
+
+        <!-- Studio Navigation Tabs -->
+        <div class="flex border-b border-[#292225] bg-[#0f0d0e] px-4 pt-2 gap-1 text-xs">
+          <button id="tab-btn-presets" class="tab-btn px-3 py-2 font-bold border-b-2 border-[#c48890] text-[#f4d7dc] transition" data-tab="presets">Community Tracks</button>
+          <button id="tab-btn-timeline" class="tab-btn px-3 py-2 font-semibold text-[#8a7a80] hover:text-[#f4f1ea] transition" data-tab="timeline">Syllable Inspector</button>
+          <button id="tab-btn-import" class="tab-btn px-3 py-2 font-semibold text-[#8a7a80] hover:text-[#f4f1ea] transition" data-tab="import">Import eLRC / TTML</button>
+          <button id="tab-btn-export" class="tab-btn px-3 py-2 font-semibold text-[#8a7a80] hover:text-[#f4f1ea] transition" data-tab="export">Poweramp Exporter</button>
+        </div>
+
+        <!-- Modal Body Content -->
+        <div class="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+
+          <!-- Tab 1: Community Word-by-Word Presets (r/Poweramp Recommended) -->
+          <div id="tab-content-presets" class="tab-pane space-y-3">
+            <div class="p-3 rounded-xl bg-[#1d1619] border border-[#3c2a32] flex items-start gap-2.5">
+              <span class="text-base">💡</span>
+              <div class="text-[11px] leading-relaxed text-[#c7b5bc]">
+                <strong class="text-[#f4d7dc]">Grounded in the r/Poweramp Community:</strong> Poweramp supports syllable-level word highlighting via Enhanced LRC (<code class="bg-black/40 px-1 py-0.5 rounded text-[#e0a8b0]">&lt;mm:ss.xx&gt;</code> tags) and Apple Music TTML XML. Select any master track below to experience true sub-second syllable synchronization!
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <!-- Preset 1: Payphone -->
+              <button class="btn-load-preset p-3 rounded-xl bg-[#191517] hover:bg-[#261d21] border border-[#302428] hover:border-[#c48890]/50 text-left transition flex items-center justify-between group" data-preset="payphone">
+                <div>
+                  <div class="font-bold text-[#f4f1ea] group-hover:text-[#f4d7dc]">Payphone (feat. Wiz)</div>
+                  <div class="text-[10px] text-[#8e8278]">Maroon 5 &bull; Kinetic Master</div>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-[#c48890]/20 text-[#e6aeb6] text-[9px] font-mono font-bold">Kinetic WBW</span>
+              </button>
+
+              <!-- Preset 2: Blinding Lights (Enhanced LRC) -->
+              <button class="btn-load-preset p-3 rounded-xl bg-[#191517] hover:bg-[#261d21] border border-[#302428] hover:border-[#c48890]/50 text-left transition flex items-center justify-between group" data-preset="blinding-lights">
+                <div>
+                  <div class="font-bold text-[#f4f1ea] group-hover:text-[#f4d7dc]">Blinding Lights</div>
+                  <div class="text-[10px] text-[#8e8278]">The Weeknd &bull; Enhanced LRC</div>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">eLRC Tags</span>
+              </button>
+
+              <!-- Preset 3: Stay With Me (Apple Music TTML) -->
+              <button class="btn-load-preset p-3 rounded-xl bg-[#191517] hover:bg-[#261d21] border border-[#302428] hover:border-[#c48890]/50 text-left transition flex items-center justify-between group" data-preset="stay-with-me">
+                <div>
+                  <div class="font-bold text-[#f4f1ea] group-hover:text-[#f4d7dc]">Stay With Me</div>
+                  <div class="text-[10px] text-[#8e8278]">Sam Smith &bull; Apple Music TTML</div>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[9px] font-mono font-bold">TTML XML</span>
+              </button>
+
+              <!-- Preset 4: Levitating (Musixmatch Richsync) -->
+              <button class="btn-load-preset p-3 rounded-xl bg-[#191517] hover:bg-[#261d21] border border-[#302428] hover:border-[#c48890]/50 text-left transition flex items-center justify-between group" data-preset="levitating">
+                <div>
+                  <div class="font-bold text-[#f4f1ea] group-hover:text-[#f4d7dc]">Levitating</div>
+                  <div class="text-[10px] text-[#8e8278]">Dua Lipa &bull; Musixmatch Richsync</div>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-mono font-bold">Richsync JSON</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tab 2: Real-Time Syllable / Word Inspector -->
+          <div id="tab-content-timeline" class="tab-pane hidden space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] text-[#a8959b]">Click any word chip to seek playback directly to that syllable:</span>
+              <span id="wordsync-active-word-info" class="text-[10px] font-mono text-[#c48890] font-bold">Word: -</span>
+            </div>
+            <!-- Word Chips Flow Container -->
+            <div id="wordsync-chips-container" class="max-h-60 overflow-y-auto p-3 rounded-xl bg-[#0e0c0d] border border-[#2d2226] flex flex-wrap gap-1.5 font-mono text-[11px]">
+              <!-- Injected dynamically via JS -->
+            </div>
+          </div>
+
+          <!-- Tab 3: Custom Lyrics Importer -->
+          <div id="tab-content-import" class="tab-pane hidden space-y-3">
+            <div class="text-[11px] text-[#a8959b]">
+              Paste any <strong class="text-[#f4d7dc]">Enhanced LRC</strong> (<code class="text-[#e0a8b0]">&lt;00:12.34&gt;word</code>), <strong class="text-[#f4d7dc]">Apple Music TTML</strong> XML (<code class="text-[#e0a8b0]">&lt;span begin="..."&gt;</code>), or Musixmatch JSON below:
+            </div>
+            <textarea id="wordsync-import-textarea" rows="6" placeholder="Paste Enhanced LRC, TTML XML, or standard LRC here..." class="w-full p-3 bg-[#0c0a0b] border border-[#302428] rounded-xl text-xs text-[#f4f1ea] font-mono focus:outline-none focus:border-[#c48890] resize-y"></textarea>
+            
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <!-- File Drag & Drop / Input -->
+              <label class="cursor-pointer px-3 py-1.5 rounded-lg bg-[#20191c] hover:bg-[#2d2227] border border-[#3d2a32] text-[11px] font-semibold text-[#e8d5da] transition flex items-center gap-1.5">
+                <span>📁</span>
+                <span>Upload .lrc / .ttml file</span>
+                <input id="wordsync-file-input" type="file" accept=".lrc,.ttml,.xml,.txt,.json" class="hidden" />
+              </label>
+
+              <button id="btn-wordsync-parse" class="px-4 py-2 bg-[#c48890] hover:bg-[#b0747c] text-black font-extrabold rounded-xl transition active:scale-95 shadow-md">
+                Parse & Sync Lyrics
+              </button>
+            </div>
+            <span id="wordsync-import-status" class="text-[10px] text-[#8e8278]"></span>
+          </div>
+
+          <!-- Tab 4: Poweramp Exporter Suite -->
+          <div id="tab-content-export" class="tab-pane hidden space-y-3">
+            <div class="p-3 rounded-xl bg-[#1d1619] border border-[#3c2a32] flex items-start gap-2.5">
+              <span class="text-base">⚡</span>
+              <div class="text-[11px] leading-relaxed text-[#c7b5bc]">
+                <strong class="text-[#f4d7dc]">Poweramp Implementation Guide:</strong> Poweramp automatically detects syllable synchronization when an <code class="bg-black/40 px-1 py-0.5 rounded text-[#e0a8b0]">.lrc</code> file contains syllable tags (<code class="bg-black/40 px-1 py-0.5 rounded text-[#e0a8b0]">&lt;mm:ss.xx&gt;</code>). Name your downloaded file the same as your audio file (e.g. <code class="text-white">SongName.lrc</code> beside <code class="text-white">SongName.mp3</code>) in your music folder!
+              </div>
+            </div>
+
+            <!-- Export Buttons -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <button id="btn-export-elrc" class="p-2.5 rounded-xl bg-[#231b1e] hover:bg-[#322429] border border-[#442c35] text-left transition active:scale-95 group">
+                <div class="font-bold text-[#f4d7dc]">Poweramp eLRC</div>
+                <div class="text-[9px] text-[#9c8990]">Download syllable .lrc</div>
+              </button>
+
+              <button id="btn-export-ttml" class="p-2.5 rounded-xl bg-[#231b1e] hover:bg-[#322429] border border-[#442c35] text-left transition active:scale-95 group">
+                <div class="font-bold text-[#f4d7dc]">Apple Music TTML</div>
+                <div class="text-[9px] text-[#9c8990]">Download SpotiFLAC .ttml</div>
+              </button>
+
+              <button id="btn-export-copy" class="p-2.5 rounded-xl bg-[#c48890]/20 hover:bg-[#c48890]/30 border border-[#c48890]/50 text-left transition active:scale-95 group">
+                <div class="font-bold text-[#f4d7dc]">Copy to Clipboard</div>
+                <div class="text-[9px] text-[#9c8990]" id="copy-status-subtext">Instant copy with tags</div>
+              </button>
+            </div>
+
+            <!-- Live Output Preview -->
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-[10px] text-[#8e8278]">
+                <span>Generated Output Preview:</span>
+                <span id="export-preview-stats">0 lines &bull; 0 words</span>
+              </div>
+              <pre id="export-preview-box" class="w-full max-h-40 overflow-y-auto p-3 bg-[#0c0a0b] border border-[#2b2125] rounded-xl text-[10px] text-[#d6c5ca] font-mono select-all leading-normal"></pre>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-3 border-t border-[#261f22] bg-[#120f10] flex items-center justify-between">
+          <span class="text-[10px] text-[#736469]">LiveLyrics High-Precision Syllable Sync Engine</span>
+          <button id="btn-close-wordsync-bottom" class="px-3 py-1.5 rounded-lg bg-[#251d20] hover:bg-[#33272b] text-[11px] font-semibold text-[#f4f1ea] transition">Done</button>
         </div>
 
       </div>

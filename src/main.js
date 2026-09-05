@@ -9,7 +9,19 @@ import {
   fetchLyricsFromBetterLyricsCfApi,
   extractYouTubeVideoId,
   parseLrcLyrics,
+  parseEnhancedLrc,
+  parseTtmlLyrics,
+  parseMusixmatchRichsync,
+  parseAnyLyricsFormat,
+  exportTrackToEnhancedLrc,
+  exportTrackToTtml,
+  exportTrackToStandardLrc,
 } from './lyrics.js';
+import {
+  SAMPLE_ELRC_BLINDING_LIGHTS,
+  SAMPLE_TTML_STAY_WITH_ME,
+  SAMPLE_RICHSYNC_LEVITATING,
+} from './wordSyncSamples.js';
 
 class LiveLyricsApp {
   constructor() {
@@ -99,6 +111,25 @@ class LiveLyricsApp {
       inputSongSearch: document.getElementById('input-song-search'),
       btnSearchLyrics: document.getElementById('btn-search-lyrics'),
       searchStatusText: document.getElementById('search-status-text'),
+
+      // Word-by-Word Studio Modal DOM elements
+      btnOpenWordSync: document.getElementById('btn-open-wordsync'),
+      wordsyncModal: document.getElementById('wordsync-modal'),
+      btnCloseWordSync: document.getElementById('btn-close-wordsync'),
+      btnCloseWordSyncBottom: document.getElementById('btn-close-wordsync-bottom'),
+      wordSyncFormatBadge: document.getElementById('word-sync-format-badge'),
+      wordsyncChipsContainer: document.getElementById('wordsync-chips-container'),
+      wordsyncActiveWordInfo: document.getElementById('wordsync-active-word-info'),
+      wordsyncImportTextarea: document.getElementById('wordsync-import-textarea'),
+      wordsyncFileInput: document.getElementById('wordsync-file-input'),
+      btnWordsyncParse: document.getElementById('btn-wordsync-parse'),
+      wordsyncImportStatus: document.getElementById('wordsync-import-status'),
+      btnExportElrc: document.getElementById('btn-export-elrc'),
+      btnExportTtml: document.getElementById('btn-export-ttml'),
+      btnExportCopy: document.getElementById('btn-export-copy'),
+      copyStatusSubtext: document.getElementById('copy-status-subtext'),
+      exportPreviewStats: document.getElementById('export-preview-stats'),
+      exportPreviewBox: document.getElementById('export-preview-box'),
     };
 
     this.init();
@@ -533,11 +564,163 @@ class LiveLyricsApp {
 
     // Spacebar Play/Pause
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+      if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
         e.preventDefault();
         this.togglePlayback(!this.isPlaying);
       }
     });
+
+    // Word-by-Word Studio Modal Controls
+    if (this.dom.btnOpenWordSync) {
+      this.dom.btnOpenWordSync.addEventListener('click', () => {
+        this.openWordSyncModal();
+      });
+    }
+
+    if (this.dom.btnCloseWordSync) {
+      this.dom.btnCloseWordSync.addEventListener('click', () => {
+        this.dom.wordsyncModal.classList.add('hidden');
+      });
+    }
+
+    if (this.dom.btnCloseWordSyncBottom) {
+      this.dom.btnCloseWordSyncBottom.addEventListener('click', () => {
+        this.dom.wordsyncModal.classList.add('hidden');
+      });
+    }
+
+    // Studio Navigation Tabs
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.getAttribute('data-tab');
+        document.querySelectorAll('.tab-btn').forEach((b) => {
+          b.classList.remove('border-b-2', 'border-[#c48890]', 'text-[#f4d7dc]', 'font-bold');
+          b.classList.add('text-[#8a7a80]', 'font-semibold');
+        });
+        btn.classList.add('border-b-2', 'border-[#c48890]', 'text-[#f4d7dc]', 'font-bold');
+        btn.classList.remove('text-[#8a7a80]', 'font-semibold');
+
+        document.querySelectorAll('.tab-pane').forEach((p) => p.classList.add('hidden'));
+        const targetPane = document.getElementById(`tab-content-${tabName}`);
+        if (targetPane) targetPane.classList.remove('hidden');
+
+        if (tabName === 'timeline') {
+          this.renderWordSyncTimeline();
+        } else if (tabName === 'export') {
+          this.updateExportPreview();
+        }
+      });
+    });
+
+    // Community Master Word-by-Word Presets (r/Poweramp)
+    document.querySelectorAll('.btn-load-preset').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const preset = btn.getAttribute('data-preset');
+        this.loadWordSyncPreset(preset);
+      });
+    });
+
+    // Custom Lyrics Import Parse
+    if (this.dom.btnWordsyncParse) {
+      this.dom.btnWordsyncParse.addEventListener('click', () => {
+        const text = this.dom.wordsyncImportTextarea?.value?.trim();
+        if (!text) {
+          if (this.dom.wordsyncImportStatus) {
+            this.dom.wordsyncImportStatus.textContent = 'Please paste lyrics text first.';
+            this.dom.wordsyncImportStatus.className = 'text-[10px] text-amber-400';
+          }
+          return;
+        }
+        const result = parseAnyLyricsFormat(text, 'Custom Track', 'Custom Artist');
+        if (result && result.frames && result.frames.length > 0) {
+          this.currentTrack = result;
+          this.seekTo(0);
+          this.updateTrackMetadata();
+          this.updateActiveFrame(true);
+          this.updateWordSyncBadge();
+          this.renderWordSyncTimeline();
+          this.updateExportPreview();
+          if (this.dom.wordsyncImportStatus) {
+            this.dom.wordsyncImportStatus.textContent = `✓ Successfully parsed ${result.frames.length} phrases in ${result.format || 'synced'} format!`;
+            this.dom.wordsyncImportStatus.className = 'text-[10px] text-emerald-400 font-bold';
+          }
+        } else {
+          if (this.dom.wordsyncImportStatus) {
+            this.dom.wordsyncImportStatus.textContent = 'Could not detect timestamps. Please ensure eLRC <00:12.34> or TTML <span begin="..."> tags are present.';
+            this.dom.wordsyncImportStatus.className = 'text-[10px] text-amber-400';
+          }
+        }
+      });
+    }
+
+    // Custom Lyrics File Upload
+    if (this.dom.wordsyncFileInput) {
+      this.dom.wordsyncFileInput.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const text = event.target?.result;
+          if (typeof text === 'string') {
+            if (this.dom.wordsyncImportTextarea) this.dom.wordsyncImportTextarea.value = text;
+            const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+            const result = parseAnyLyricsFormat(text, fileNameWithoutExt, 'Uploaded Track');
+            if (result && result.frames && result.frames.length > 0) {
+              this.currentTrack = result;
+              this.seekTo(0);
+              this.updateTrackMetadata();
+              this.updateActiveFrame(true);
+              this.updateWordSyncBadge();
+              this.renderWordSyncTimeline();
+              this.updateExportPreview();
+              if (this.dom.wordsyncImportStatus) {
+                this.dom.wordsyncImportStatus.textContent = `✓ Loaded ${file.name} (${result.frames.length} phrases, ${result.format})!`;
+                this.dom.wordsyncImportStatus.className = 'text-[10px] text-emerald-400 font-bold';
+              }
+            }
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    // Poweramp & Syllable Exporters
+    if (this.dom.btnExportElrc) {
+      this.dom.btnExportElrc.addEventListener('click', () => {
+        const elrcContent = exportTrackToEnhancedLrc(this.currentTrack);
+        const filename = `${this.currentTrack.title || 'Lyrics'}.lrc`;
+        this.downloadFile(filename, elrcContent, 'text/plain');
+      });
+    }
+
+    if (this.dom.btnExportTtml) {
+      this.dom.btnExportTtml.addEventListener('click', () => {
+        const ttmlContent = exportTrackToTtml(this.currentTrack);
+        const filename = `${this.currentTrack.title || 'Lyrics'}.ttml`;
+        this.downloadFile(filename, ttmlContent, 'application/xml');
+      });
+    }
+
+    if (this.dom.btnExportCopy) {
+      this.dom.btnExportCopy.addEventListener('click', async () => {
+        const elrcContent = exportTrackToEnhancedLrc(this.currentTrack);
+        try {
+          await navigator.clipboard.writeText(elrcContent);
+          if (this.dom.copyStatusSubtext) {
+            this.dom.copyStatusSubtext.textContent = '✓ Copied to clipboard!';
+            this.dom.copyStatusSubtext.className = 'text-[9px] text-emerald-400 font-bold';
+            setTimeout(() => {
+              this.dom.copyStatusSubtext.textContent = 'Instant copy with tags';
+              this.dom.copyStatusSubtext.className = 'text-[9px] text-[#9c8990]';
+            }, 2500);
+          }
+        } catch (err) {
+          if (this.dom.copyStatusSubtext) {
+            this.dom.copyStatusSubtext.textContent = 'Copied preview text';
+          }
+        }
+      });
+    }
   }
 
   async setupSpotifyAuthCheck() {
@@ -761,6 +944,8 @@ class LiveLyricsApp {
       this.dom.modeBadge.textContent = 'Demo Mode';
       this.dom.modeBadge.className = 'text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-[#3b3430] text-[#f4f1ea] border border-[#524843]';
     }
+
+    this.updateWordSyncBadge();
   }
 
   formatTime(sec) {
@@ -806,6 +991,7 @@ class LiveLyricsApp {
 
     // Update kinetic stage typography and word-by-word highlight
     this.updateActiveFrame(false);
+    this.updateWordSyncTimelineActiveWord();
 
     requestAnimationFrame((ts) => this.renderLoop(ts));
   }
@@ -967,6 +1153,140 @@ class LiveLyricsApp {
     } else {
       this.dom.activeWordLabel.textContent = 'Live Sync';
     }
+  }
+
+  openWordSyncModal() {
+    if (!this.dom.wordsyncModal) return;
+    this.dom.wordsyncModal.classList.remove('hidden');
+    this.renderWordSyncTimeline();
+    this.updateExportPreview();
+  }
+
+  updateWordSyncBadge() {
+    const badge = this.dom.wordSyncFormatBadge;
+    if (!badge) return;
+    const fmt = this.currentTrack?.format;
+    if (fmt === 'elrc') {
+      badge.textContent = 'eLRC';
+      badge.className = 'px-1.5 py-0.5 bg-amber-500/25 text-amber-300 rounded text-[9px] font-mono font-bold';
+    } else if (fmt === 'ttml') {
+      badge.textContent = 'TTML';
+      badge.className = 'px-1.5 py-0.5 bg-rose-500/25 text-rose-300 rounded text-[9px] font-mono font-bold';
+    } else if (fmt === 'richsync') {
+      badge.textContent = 'Richsync';
+      badge.className = 'px-1.5 py-0.5 bg-cyan-500/25 text-cyan-300 rounded text-[9px] font-mono font-bold';
+    } else {
+      badge.textContent = 'Syllable';
+      badge.className = 'px-1.5 py-0.5 bg-[#c48890]/25 text-[#f4bcc3] rounded text-[9px] font-mono font-bold';
+    }
+  }
+
+  loadWordSyncPreset(preset) {
+    let track = null;
+    if (preset === 'payphone') {
+      track = PAYPHONE_DEMO;
+    } else if (preset === 'blinding-lights') {
+      track = parseEnhancedLrc(SAMPLE_ELRC_BLINDING_LIGHTS, 'Blinding Lights', 'The Weeknd');
+    } else if (preset === 'stay-with-me') {
+      track = parseTtmlLyrics(SAMPLE_TTML_STAY_WITH_ME, 'Stay With Me', 'Sam Smith');
+    } else if (preset === 'levitating') {
+      track = parseMusixmatchRichsync(SAMPLE_RICHSYNC_LEVITATING, 'Levitating', 'Dua Lipa');
+    }
+
+    if (track) {
+      this.currentTrack = track;
+      this.seekTo(0);
+      this.updateTrackMetadata();
+      this.updateActiveFrame(true);
+      this.updateWordSyncBadge();
+      this.renderWordSyncTimeline();
+      this.updateExportPreview();
+      if (!this.isPlaying) this.togglePlayback(true);
+    }
+  }
+
+  renderWordSyncTimeline() {
+    if (!this.dom.wordsyncChipsContainer) return;
+    this.dom.wordsyncChipsContainer.innerHTML = '';
+
+    const frames = this.currentTrack?.frames || [];
+    let totalWords = 0;
+
+    frames.forEach((frame, fIdx) => {
+      frame.lines.forEach((line, lIdx) => {
+        line.words.forEach((w, wIdx) => {
+          totalWords++;
+          const chip = document.createElement('button');
+          chip.className = 'wordsync-chip px-2 py-1 rounded bg-[#181416] hover:bg-[#2e1f25] border border-[#36252c] text-[#d6c4c9] hover:text-white transition flex items-center gap-1.5 active:scale-95';
+          chip.id = `ws-chip-${fIdx}-${lIdx}-${wIdx}`;
+          chip.dataset.time = w.time.toString();
+          chip.dataset.duration = (w.duration || 0.6).toString();
+          chip.dataset.text = w.text;
+
+          const timeFormatted = this.formatTime(w.time);
+          chip.innerHTML = `<span class="text-white font-bold">${w.text}</span><span class="text-[9px] text-[#917d84]">&lt;${timeFormatted}&gt;</span>`;
+
+          chip.addEventListener('click', () => {
+            this.seekTo(w.time);
+            if (!this.isPlaying) this.togglePlayback(true);
+          });
+
+          this.dom.wordsyncChipsContainer.appendChild(chip);
+        });
+      });
+    });
+
+    if (totalWords === 0) {
+      this.dom.wordsyncChipsContainer.innerHTML = '<span class="text-[#8e8278]">No syllable timing available for this track yet.</span>';
+    }
+  }
+
+  updateWordSyncTimelineActiveWord() {
+    if (!this.dom.wordsyncModal || this.dom.wordsyncModal.classList.contains('hidden')) return;
+    const chips = this.dom.wordsyncChipsContainer?.querySelectorAll('.wordsync-chip');
+    if (!chips || chips.length === 0) return;
+
+    chips.forEach((chip) => {
+      const time = parseFloat(chip.dataset.time);
+      const dur = parseFloat(chip.dataset.duration);
+      const isActive = this.currentTime >= time && this.currentTime < time + dur;
+      if (isActive) {
+        chip.classList.add('bg-[#c48890]', 'text-black', 'border-[#f4d7dc]', 'font-extrabold', 'scale-105');
+        chip.classList.remove('bg-[#181416]', 'text-[#d6c4c9]');
+        if (this.dom.wordsyncActiveWordInfo) {
+          this.dom.wordsyncActiveWordInfo.textContent = `Word: "${chip.dataset.text}" @ ${this.formatTime(time)}`;
+        }
+      } else {
+        chip.classList.remove('bg-[#c48890]', 'text-black', 'border-[#f4d7dc]', 'font-extrabold', 'scale-105');
+        chip.classList.add('bg-[#181416]', 'text-[#d6c4c9]');
+      }
+    });
+  }
+
+  updateExportPreview() {
+    if (!this.dom.exportPreviewBox) return;
+    const elrc = exportTrackToEnhancedLrc(this.currentTrack);
+    this.dom.exportPreviewBox.textContent = elrc;
+
+    const lines = elrc.split('\n').filter((l) => l.trim().length > 0);
+    let wordCount = 0;
+    this.currentTrack.frames?.forEach((f) => f.lines.forEach((l) => (wordCount += l.words.length)));
+
+    if (this.dom.exportPreviewStats) {
+      this.dom.exportPreviewStats.textContent = `${lines.length} lines • ${wordCount} synced syllables`;
+    }
+  }
+
+  downloadFile(filename, content, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 }
 
